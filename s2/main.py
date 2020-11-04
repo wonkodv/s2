@@ -24,8 +24,12 @@ def get_arg_parser():
     parser.add_argument('--save-images', '-s',
                         help="image dump (~/s2/images/{time}.png)",
                         )
+    parser.add_argument('--debug-mode', '-d',
+                        help="Show, save, breakpoint",
+                        )
     parser.add_argument('tests',
                         nargs="*",
+                        type=pathlib.Path,
                         help="Some Test images to analyze",
                         )
 
@@ -56,9 +60,9 @@ def main():
     logger.debug(options)
     try:
         if not options.tests:
-            s2.S2(options.save_images).run()
+            s2.S2(options.save_images, debug_mode=options.debug_mode).run()
         else:
-            s2.S2().test(options.tests)
+            s2.S2(debug_mode=options.debug_mode).test(options.tests)
 
     except Exception as e:
         logger.exception("Exception while doing stuff")
