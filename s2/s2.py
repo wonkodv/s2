@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 cwd = pathlib.Path.cwd()
 
 
+numpy.set_printoptions(formatter={'float': "{:.3f}".format})
+
+
 class IMG():
     """Collection of the various ways a image can be represented."""
 
@@ -95,7 +98,8 @@ def dist(p1, p2):
 
 
 def angle_from_rot_matrix(M):
-    return - math.atan2(M[0, 1], M[0, 0]) * 180 / math.pi
+    return - math.atan2(M[0, 1], M[0, 0])
+
 
 class S2():
     last_minimap = None
@@ -127,7 +131,7 @@ class S2():
             print(ip, info)
             if self._debug_wait_key:
                 self._debug_wait_key = False
-                cv.waitKey()
+                cv.waitKey(10000)
 
     def update(self):
         img = get_image()
@@ -179,13 +183,57 @@ class S2():
         if a is None:
             return False
 
-        points = self.parse_minimap_mapper(mm)
+        points = self.parse_minimap_akaze(mm)
         if not points:
             return False
-            T = self.get_translation(*points)
+        src_pts, dst_pts = points
+        M = self.get_translation(img, src_pts, dst_pts)
+        if M is None:
+            logger.info(
+                "Did not find Transformation Matrix",
+                len(matches),
+                len(good))
+            return None
+
+        w = mm.width
+        h = mm.height
+        center = [w / 2, h / 2, 1]
+
+        v = M @ center
+
+        scale = v[2]
+        v /= scale
+        shift = v[:2]
+
+        rot = angle_from_rot_matrix(M)
+
+        logger.debug("Translation Matrix: \n%r", M)
+        logger.debug("Center Shift: %r", shift)
+        logger.debug("Scale: %r", scale)
+        logger.debug("Angle: %r°", rot * 180 / math.pi)
+
+        @self.debug_img
+        def minimap_with_previous_position():
+            arrow = [w / 2, h / 4, 1]
+            arrow = M @ arrow
+            arrow /= arrow[2]
+            arrow = arrow[:2]
+
+            arrow = tuple(numpy.uint32(numpy.clip(arrow, 0, [w, h])))
+            c = tuple(numpy.uint32(numpy.clip(shift, 0, [w, h])))
+
+            return cv2.line(
+                mm.rgb,
+                c,
+                arrow,
+                (0x00, 0xFF, 0xFF),
+                2,
+            )
 
     mapper = cv2.reg_MapperGradEuclid()
+
     def parse_minimap_mapper(self, curr):
+        # https://docs.opencv.org/master/db/d61/group__reg.html
         assert curr.width == curr.height
         shape = curr.height, curr.width
         r = curr.width // 2
@@ -196,7 +244,6 @@ class S2():
 
         curr_gray = cv.fastNlMeansDenoising(curr_gray, 30, 7, 11, )
         curr_edges = cv2.Canny(curr_gray, 100, 200)
-
 
         last = self.last_minimap
         self.last_minimap = curr, curr_edges
@@ -212,18 +259,21 @@ class S2():
             return np.concatenate((last_edges, curr_edges), axis=1)
 
         m = self.mapper.calculate(last_edges, curr_edges)
+        # https://stackoverflow.com/questions/54022282/what-is-an-cv2-reg-mappergradeuclid-object-opencv
+        # https://docs.opencv.org/3.4/d9/de5/classcv_1_1reg_1_1MapAffine.html
         m = cv.reg.MapTypeCaster_toAffine(m)
 
         shift = m.getShift()
         M = m.getLinTr()
-        theta = angle_from_rot_matrix(M)
+        rot = angle_from_rot_matrix(M)
 
-        logger.debug("shift: %r angle : %f  M: %r", shift, theta, M)
-
+        logger.debug("shift: %r angle : %f  M: %r", shift, rot, M)
 
     orb = cv.ORB_create(scaleFactor=1.3)
     bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+
     def parse_minimap_orb(self, curr):
+        # https://docs.opencv.org/master/d1/d89/tutorial_py_orb.html
         assert curr.width == curr.height
         shape = curr.height, curr.width
         r = curr.width // 2
@@ -285,9 +335,79 @@ class S2():
 
         return src_pts, dst_pts
 
-    if False:
-        bd = cv.line_descriptor_BinaryDescriptor_createBinaryDescriptor()
+    akaze = cv.AKAZE_create()
+    dm = cv.DescriptorMatcher_create(cv.DescriptorMatcher_BRUTEFORCE_HAMMING)
+
+    def parse_minimap_akaze(self, curr):
+        # https://docs.opencv.org/master/db/d70/tutorial_akaze_matching.html
+        assert curr.width == curr.height
+        shape = curr.height, curr.width
+        r = curr.width // 2
+        curr_gray = curr.gray
+        outer_mask = circle_mask(shape)
+        inner_mask = circle_mask(shape, radius=15)
+        mask = ~(inner_mask & outer_mask)
+
+        curr_gray = cv.fastNlMeansDenoising(curr_gray, 30, 7, 11, )
+        curr_edges = cv2.Canny(curr_gray, 100, 200)
+
+        curr_kp = self.akaze.detect(curr_edges, None)  # TODO: Mask
+        #curr_kp = [p for p in curr_kp if 15 < dist(p.pt, (r, r)) < r - 5]
+
+        @self.debug_img
+        def akaze_key_points_in_canny_edges():
+            return cv.drawKeypoints(
+                curr_edges,
+                curr_kp,
+                None,
+                (0, 0, 0xFF))
+
+        curr_kp, curr_des = self.akaze.compute(curr_edges, curr_kp)
+
+        last = self.last_minimap
+        self.last_minimap = curr, curr_edges, curr_kp, curr_des
+
+        if last is None:
+            logger.info("No previous minimap to compare to")
+            return False
+
+        last_img, last_edges, last_kp, last_des = last
+
+        matches = self.dm.knnMatch(last_des, curr_des, 2)
+        good = [m for m, n in matches
+                if m.distance < 0.8 * n.distance]
+
+        @self.debug_img
+        def akaze_matches():
+            return cv.drawMatches(
+                last_img.rgb,
+                last_kp,
+                curr.rgb,
+                curr_kp,
+                good,
+                None,
+                flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+            )
+
+        if len(good) < 8:
+            logger.info(
+                "Did not find enough good matches, %d %d",
+                len(matches),
+                len(good))
+            return False
+
+        src_pts = np.float32(
+            [last_kp[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+        dst_pts = np.float32(
+            [curr_kp[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+        return src_pts, dst_pts
+
+    if False:  # disabled in opencv for licensing issues
+        bd = cv.line_descriptor.BinaryDescriptor_createBinaryDescriptor()
+        lsd = cv.line_descriptor.LSDDetector_createLSDDetector()
         bdm = cv.line_descriptor_BinaryDescriptorMatcher()
+
         def parse_minimap_lines(self, curr):
             assert curr.width == curr.height
             shape = curr.height, curr.width
@@ -300,7 +420,8 @@ class S2():
             curr_gray = cv.fastNlMeansDenoising(curr_gray, 30, 7, 11, )
             curr_edges = cv2.Canny(curr_gray, 100, 200)
 
-            curr_kp = self.bd.detect(curr_edges) # TODO: Mask
+            # TODO: ? keylines = []
+            curr_kp = self.lsd.detect(curr_edges, 2, 1, )  # TODO: Mask
             #curr_kp = [p for p in curr_kp if 15 < dist(p.pt, (r, r)) < r - 5]
 
             @self.debug_img
@@ -322,7 +443,7 @@ class S2():
 
             last_img, last_edges, last_kp, last_des = last
 
-            bf =  cv.line_descriptor_BinaryDescriptorMatcher()
+            bf = cv.line_descriptor_BinaryDescriptorMatcher()
 
             matches = bf.match(last_des, curr_des)
             good = [m for m in matches if m.distance < 50]
@@ -353,54 +474,15 @@ class S2():
             return src_pts, dst_pts
 
     def get_translation(self, img, src_pts, dst_pts):
-        M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
-        if M is None:
-            logger.info(
-                "Did not find Transformation Matrix",
-                len(matches),
-                len(good))
-            return None
-
-        matchesMask = mask.ravel().tolist()
-        h, w, d = img.shape
-        pts = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1],
-                          [w - 1, 0]]).reshape(-1, 1, 2)
-        dst = cv.perspectiveTransform(pts, M)
-
-        theta = angle_from_rot_matrix(M)
-
-        logger.debug("Translation Matrix: %r", M)
-        logger.debug("Translation Points: %r", dst)
-        logger.debug("Translation Angle: %r", theta)
-        return False
-
-    def parse_minimap_others(self, curr):
-        pass
-        # curr_gray[~cm] = 0x81
-
-        # curr_gray=cv.fastNlMeansDenoising(curr_gray, 30, 7, 11, )
-        # curr_gray = cv2.blur(curr_gray, (3, 3))
-
-        # curr_edges=cv2.Canny(curr_gray, 100, 200)
-
-        # curr_edges[cm] = 0
-
-        # sharpen_kernel = np.array([[-1,-1,-1,],[-1,9,-1,],[-1,-1,-1,]])
-        # curr_gray = cv2.filter2D(curr_gray, -1, sharpen_kernel)
-
-        # curr_gray = curr_gray // 32
-        # curr_gray = curr_gray * 32
-
-        # cv2.imshow("Canny",  curr_edges)
-
-        # kp = cv.FastFeatureDetector_create().detect(curr_edges,None)
-        # edges_points = cv.drawKeypoints(edges, kp, None, (0,0,0xFF), cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-        # cv2.imshow("Fast Features in Canny",  edges_points)
-
-        # curr_rgb_edges = numpy.zeros_like(curr_rgb)
-        # curr_rgb_edges[curr_edges == 0] = 0xFF, 0xFF, 0xFF
-        # cv2.imshow("curr_rgb_edges", curr_rgb_edges)
-        # cv2.waitKey()
+        M, mask = cv.findHomography(
+            src_pts,
+            dst_pts,
+            cv.RANSAC,
+            2,
+            None,
+            1000,
+            0.999)
+        return M
 
     def get_minimap_arrow(self, mm):
         """ Look for the Minimap Arrow.
