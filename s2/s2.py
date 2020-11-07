@@ -111,7 +111,7 @@ class S2():
         self.image_save_path = image_save_path
         self.debug_mode = debug_mode
         self.map = IMG(image=PIL.Image.open("map.png"))
-        self.map.edges = numpy.array(PIL.Image.open("map_edges.bmp"))
+        self.map.edges = numpy.array(PIL.Image.open("map_edges.png")) # quicker
 
         self.akaze = cv.AKAZE_create()
         self.dm = cv.DescriptorMatcher_create(

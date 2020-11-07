@@ -17,3 +17,11 @@ Works With
 
 Working on GTA IV. If that works, the code will be refactored heavily to support
 multiple games.
+
+
+LICENSING
+---------
+
+The python code in this repository is Public Domain.
+
+The Images are copied from gta4.net and copyright holder is Rockstar.
