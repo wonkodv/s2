@@ -67,6 +67,7 @@ class IMG():
     def edges(self):
         return cv2.Canny(self.gray, 100, 200)
 
+
 def get_test_image(p):
     img = PIL.Image.open(p)
     return IMG(image=img)
@@ -101,23 +102,26 @@ def circle_mask(shape, center=None, radius=None):
     return mask
 
 
-def angle_from_rot_matrix(M):
-    return - math.atan2(M[0, 1], M[0, 0])
-
-
 class S2():
     last_minimap = None
     _debug_path = None
     _debug_wait_key = None
-
-
 
     def __init__(self, image_save_path=None, debug_mode=None):
         self.image_save_path = image_save_path
         self.debug_mode = debug_mode
         self.map = IMG(image=PIL.Image.open("map.png"))
         self.map.edges = numpy.array(PIL.Image.open("map_edges.bmp"))
+
+        self.akaze = cv.AKAZE_create()
+        self.dm = cv.DescriptorMatcher_create(
+            cv.DescriptorMatcher_BRUTEFORCE_HAMMING)
+
         self.pos = 3100, 2600
+        self.heading = 0
+        self.updates_since_last_fix = 0
+
+        self._map_feature_cache = {}
 
     def setup_hotkeys(self):
         import hotkey
@@ -137,10 +141,16 @@ class S2():
             self._debug_path = f"{ip.parent}/{ip.stem}-{{tag}}{ip.suffix}"
             img = get_test_image(ip)
             info = self.parse_image(img)
-            print(ip, info)
+            # print(ip, info)
             if self._debug_wait_key:
                 self._debug_wait_key = False
-                cv.waitKey(1000)
+                if 'wait' in self.debug_mode:
+                    wait = True
+                    # catch Keyboard Interrupt every 100ms
+                    while wait:
+                        wait = cv.waitKey(100) < 0
+                else:
+                    cv.waitKey(1)
 
     def update(self):
         img = get_image()
@@ -169,34 +179,46 @@ class S2():
             self._debug_wait_key = True
 
     def parse_image(self, img):
+        @self.debug_img
+        def current_screen_grab():
+            return img.rgb
         done = self.parse_map(img)
         if not done:
             done = self.parse_minimap(img)
 
+        if done:
+            self.updates_since_last_fix = 0
+        else:
+            self.updates_since_last_fix += 0
 
     def parse_map(self, img):
         black_map_pixels = img.rgb[0:10, 500:510]
         if (black_map_pixels == 0).all():
-            return True # everything with a large black patch is a map to me
-
+            return True  # everything with a large black patch is a map to me
 
     def map_features(self):
-        # TODO: Snap to grid and cache
         x, y = self.pos
 
+        # todo: add based on speed and heading ?
+        groups = 64 # cach features for 64 by 64 pixel blocks.
+        box_size = 512
+
+        x |= groups-1
+        y |= groups-1
+
         slices = (
-                slice(y-200, y+200),
-                slice(x-200, x+200),
-                )
+            slice(y - box_size//2 - groups//2, y + box_size//2 - groups//2),
+            slice(x - box_size//2 - groups//2, x + box_size//2 - groups//2),
+        )
 
-        box_edges = self.map.edges[slices]
-        kp, des = self.akaze.detectAndCompute(
-            box_edges,
-            None,
-            )
+        key = x, y
+        features = self._map_feature_cache.get(key)
+        if features is None:
+            features = self.akaze.detectAndCompute(
+                self.map.edges[slices], None)
+            self._map_feature_cache[key] = features
 
-        return kp, des, slices
-
+        return features, slices
 
     def parse_minimap(self, img):
         coords = COORDS[(img.width, img.height)]
@@ -214,35 +236,42 @@ class S2():
         #mask = ~(inner_mask & outer_mask)
         # https://docs.opencv.org/master/db/d70/tutorial_akaze_matching.html
         minimap_keypoints, minimap_descriptors = (
-                self.akaze.detectAndCompute(
-                    minimap.edges,
-                    None,  # TODO: Mask
-                    )
-                )
-
-
-        map_keypoints, map_descriptors, offset = (
-                self.map_features()
+            self.akaze.detectAndCompute(
+                minimap.edges,
+                None,  # TODO: Mask
             )
+        )
+
+        (map_keypoints, map_descriptors), offset_slices = (
+            self.map_features()
+        )
+
+        offset = numpy.array([offset_slices[1].start, offset_slices[0].start])
 
         matches = self.dm.knnMatch(minimap_descriptors, map_descriptors, 2)
         good = [m for m, n in matches
                 if m.distance < 0.8 * n.distance]
 
-        @self.debug_img
-        def akaze_matches():
-            return cv.drawMatches(
-                minimap.rgb,
-                minimap_keypoints,
-                self.map.rgb[offset],
-                map_keypoints,
-                good,
-                None,
-                flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-            )
+        # TODO: calculate center of good, then filter map_features by distance
+        # and match again
 
-        if len(good) < 8:
-            logger.info(
+        if len(good) < 6:
+            @self.debug_img
+            def minimap_with_match():
+                box = self.map.rgb[offset_slices].copy()
+                op = tuple(self.pos - offset)
+                cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1,)
+                return cv2.drawMatches(
+                    minimap.rgb,
+                    minimap_keypoints,
+                    box,
+                    map_keypoints,
+                    good,
+                    None,
+                    flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+                )
+            return True
+            logger.debug(
                 "Did not find enough good matches, %d %d",
                 len(matches),
                 len(good))
@@ -257,54 +286,68 @@ class S2():
         if M is None:
             logger.info(
                 "Did not find Transformation Matrix",
-                len(matches),
-                len(good))
+            )
             return None
 
         minimap_center = [minimap.width / 2, minimap.height / 2, 1]
 
-        box_center = M @ minimap_center
+        position_in_box = M @ minimap_center
 
-        scale = box_center[2]
-        box_center /= scale
-        box_center = box_center[:2]
+        scale = position_in_box[2]
+        position_in_box /= scale
+        position_in_box = position_in_box[:2]
 
-        pos = box_center + [offset[1].start, offset[0].start]
-        pos = numpy.uint32(pos)
+        pos = position_in_box + offset
+        pos = numpy.int32(pos)
 
-        dist = pos - self.pos
+        delta = pos - self.pos
+        dist = numpy.linalg.norm(delta)
 
-        rot = angle_from_rot_matrix(M)
+        heading = -math.atan2(M[0, 1], M[0, 0]) * 180 / math.pi % 360
 
-        logger.debug("Translation Matrix: \n%r", M)
-        logger.debug("Center In Box: %r", box_center)
-        logger.debug("Player Pos: %r", pos)
-        logger.debug("Player Moved: %d,%d  = %d", dist, numpy.linalg.norm(dist))
-        logger.debug("Scale: %r", scale)
-        logger.debug("Angle: %r°", rot * 180 / math.pi)
+        old_pos = self.pos
+
 
         @self.debug_img
-        def minimap_with_previous_position():
+        def minimap_with_match():
+
             arrow = [minimap.width / 2, 0, 1]
             arrow = M @ arrow
             arrow /= arrow[2]
             arrow = arrow[:2]
 
-            arrow = int(arrow[0]), int(arrow[1])
-            bc = tuple(numpy.uint32(box_center))
+            arrow.clip(0, 512)
 
-            return cv2.line(
-                self.map.rgb[offset].copy(),
-                bc,
-                arrow,
-                (0x00, 0xFF, 0xFF),
-                4,
+            arrow = int(arrow[0]), int(arrow[1])
+            bc = tuple(numpy.uint32(position_in_box))
+            op = tuple(old_pos - offset)
+
+            box = self.map.rgb[offset_slices].copy()
+
+            cv2.arrowedLine(box, bc, arrow, (0x00, 0xFF, 0xFF), 1,)
+
+            cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1,)
+            return cv2.drawMatches(
+                minimap.rgb,
+                minimap_keypoints,
+                box,
+                map_keypoints,
+                good,
+                None,
+                flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
             )
 
-    akaze = cv.AKAZE_create()
-    dm = cv.DescriptorMatcher_create(cv.DescriptorMatcher_BRUTEFORCE_HAMMING)
+        # calculate expected position based on speed, heading and last fix
 
+        if dist > 300:
+            logger.info("Discarded %s %d°  moved %f", pos, heading, dist)
+            return False
 
+        self.pos = pos
+        self.heading = heading
+
+        logger.info("Position update %s %d°  moved %f", pos, heading, dist)
+        return True
 
     def get_translation(self, img, src_pts, dst_pts):
         M, mask = cv.findHomography(

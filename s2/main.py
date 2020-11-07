@@ -37,7 +37,7 @@ def get_arg_parser():
 
 
 def setup_logging(options):
-    root_logger = logging.getLogger()
+    root_logger = logging.getLogger(__package__)
     root_logger.setLevel(logging.DEBUG)
 
     ch = logging.StreamHandler()
