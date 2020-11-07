@@ -1,0 +1,42 @@
+[debug_images]
+screenshot = "images/{time}.png"
+current_screen_grab = ""
+
+
+
+[logging]
+version = 1
+disable_existing_loggers = true
+
+[logging.formatters.long]
+format = "%(filename)s:%(lineno)d:%(levelname)s:%(name)s: %(message)s"
+datefmt = '%Y-%m-%d %H:%M:%S'
+
+[logging.formatters.short]
+format = "%(levelname)s:%(name)s: %(message)s"
+datefmt = '%Y-%m-%d %H:%M:%S'
+
+
+[logging.handlers.console]
+level = "INFO"
+formatter = "short"
+class = "logging.StreamHandler"
+
+[logging.handlers.file]
+level = "DEBUG"
+formatter = "long"
+class = "logging.FileHandler"
+filename = "log"
+mode = "w"
+
+
+#[logging.root]
+#handlers = [ "default",]
+#level = "DEBUG"
+
+[logging.loggers."s2"]
+handlers = [ "console","file"]
+level = "INFO"
+
+[logging.loggers."s2.util.get_image"]
+level = "WARNING"

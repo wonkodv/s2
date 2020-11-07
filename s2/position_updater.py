@@ -1,17 +1,15 @@
-import PIL.ImageGrab
 import PIL.Image
-import ctypes
-import cv2 as cv  # TODO: refactor cv away
 import cv2
 import datetime
 import functools
 import logging
-import numpy as np  # TODO: refactor np away
 import numpy
 import numpy.linalg
 import pathlib
 import time
 import math
+
+from .util import *
 
 COORDS = {
     (1920, 1080): {
@@ -20,73 +18,10 @@ COORDS = {
     }
 }
 
-
 logger = logging.getLogger(__name__)
-
-cwd = pathlib.Path.cwd()
 
 
 numpy.set_printoptions(formatter={'float': "{:.3f}".format})
-
-
-class IMG():
-    """Collection of the various ways a image can be represented."""
-
-    def __init__(self, *, image=None, rgb=None):
-        self._image = image
-        self._rgb = rgb
-        if image is not None:
-            self.width = image.width
-            self.height = image.height
-        elif rgb is not None:
-            self.height, self.width = rgb.shape[:2]
-        else:
-            raise TypeError("Must give either image or rgb or both")
-
-    @property
-    def image(self):
-        if self._image is None:
-            self._image = PIL.Image.fromarray(self._rgb)
-        return self._image
-
-    @property
-    def rgb(self):
-        if self._rgb is None:
-            self._rgb = numpy.asarray(self._image)
-        return self._rgb
-
-    @functools.cached_property
-    def gray(self):
-        return cv.cvtColor(self.rgb, cv.COLOR_RGB2GRAY)
-
-    @functools.cached_property
-    def smooth(self):
-        return cv.fastNlMeansDenoising(self.gray, 30, 7, 11, )
-
-    @functools.cached_property
-    def edges(self):
-        return cv2.Canny(self.gray, 100, 200)
-
-
-def get_test_image(p):
-    img = PIL.Image.open(p)
-    return IMG(image=img)
-
-
-def get_image():
-    """Screenshot current ForeGroundWin.
-
-        Return PIL Image and numpy RGB Array"""
-
-    import ctypes.wintypes
-    w = ctypes.windll.user32.GetForegroundWindow()
-    r = ctypes.wintypes.RECT(0, 0, 0, 0)
-    p = ctypes.byref(r)
-    if not ctypes.windll.user32.GetWindowRect(w, p):
-        raise ctypes.WinError()
-    r = r.left, r.top, r.right, r.bottom
-    img = PIL.ImageGrab.grab(r, all_screens=True)
-    return IMG(image=img)
 
 
 @functools.lru_cache
@@ -96,32 +31,28 @@ def circle_mask(shape, center=None, radius=None):
     if not radius:
         radius = min(*center)
     h, w = shape[:2]
-    Y, X = np.ogrid[:h, :w]
-    dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+    Y, X = numpy.ogrid[:h, :w]
+    dist_from_center = numpy.sqrt((X - center[0])**2 + (Y - center[1])**2)
     mask = dist_from_center <= radius
     return mask
 
 
-class S2():
+
+class PositionUpdater():
     last_minimap = None
     _debug_path = None
     _debug_wait_key = None
 
-    def __init__(self, image_save_path=None, debug_mode=None):
-        self.image_save_path = image_save_path
-        self.debug_mode = debug_mode
-        self.map = IMG(image=PIL.Image.open("map.png"))
-        self.map.edges = numpy.array(PIL.Image.open("map_edges.png")) # quicker
-
-        self.akaze = cv.AKAZE_create()
-        self.dm = cv.DescriptorMatcher_create(
-            cv.DescriptorMatcher_BRUTEFORCE_HAMMING)
+    def __init__(self, config, send_update):
+        self.config = config
+        self.send_update = send_update
 
         self.pos = 3100, 2600
         self.heading = 0
         self.updates_since_last_fix = 0
-
+        self.init = False
         self._map_feature_cache = {}
+
 
     def setup_hotkeys(self):
         import hotkey
@@ -129,72 +60,106 @@ class S2():
         self.grabHk = hotkey.HotKey("F7", self.update)
         self.finishHk = hotkey.EventHotKey("F6")
 
+    def stop(self):
+        self._running = False
+
+
+    def _init(self):
+        if self.init:
+            return
+        self.init = True
+        self.map_edges = numpy.array(PIL.Image.open("map_edges.png"))
+
+        self.akaze = cv2.AKAZE_create()
+        self.dm = cv2.DescriptorMatcher_create(
+            cv2.DescriptorMatcher_BRUTEFORCE_HAMMING)
+
     def run(self):
+        self._init()
+    
+
         # self.setup_hotkeys()
         # self.finishHk.wait()
-        while True:
-            time.sleep(100)
+        logger.info("Starting Screen Grabbing")
+        self._running = True
+        while self._running:
+            time.sleep(0)
             self.update()
 
-    def test(self, image_paths):
-        for ip in image_paths:
-            self._debug_path = f"{ip.parent}/{ip.stem}-{{tag}}{ip.suffix}"
-            img = get_test_image(ip)
-            info = self.parse_image(img)
-            # print(ip, info)
-            if self._debug_wait_key:
-                self._debug_wait_key = False
-                if 'wait' in self.debug_mode:
-                    wait = True
-                    # catch Keyboard Interrupt every 100ms
-                    while wait:
-                        wait = cv.waitKey(100) < 0
-                else:
-                    cv.waitKey(1)
+    
+    #TODO: config def test(self, image_paths):
+    #TODO: config     for ip in image_paths:
+    #TODO: config         img = get_test_image(ip)
+    #TODO: config         info = self.parse_image(img)
+    #TODO: config         # print(ip, info)
+    #TODO: config         if self._debug_wait_key:
+    #TODO: config             self._debug_wait_key = False
+    #TODO: config             if 'wait' in self.debug_mode:
+    #TODO: config                 wait = True
+    #TODO: config                 # catch Keyboard Interrupt every 100ms
+    #TODO: config           #      while wait:
+    #TODO: config           #          wait = cv2.waitKey(100) < 0
+    #TODO: config                 cv2.waitKey()
+    #TODO: config             else:
+    #TODO: config                 cv2.waitKey(100)
 
     def update(self):
-        img = get_image()
+        img = get_image(size=(1920,1080)) # TODO: no hardcoded size
 
-        time = time.time()
-        datetime = datetime.datetime.now()
-        if self.image_save_path:
-            p = pathlib.Path(self.image_save_path.format(date=date, time=time))
-            img.image.save(p)
-            self._debug_path = f"{p.parent}/{p.stem}-{{tag}}{p.suffix}"
+        if not img:
+            return
 
-        self.handle_image(img)
+        if self.config['debug_images']:
+            self._debug_format = dict(
+                time = time.time(),
+                datetime = datetime.datetime.now(),
+            )
+
+        u = self.parse_image(img)
+        if u: 
+            self.updates_since_last_fix = 0
+            x,y,alpha = u
+            self.pos = x, y
+            self.heading = alpha
+            u = Update(x,y,alpha,"PLAYER")
+            self.send_update(u)
+        else:
+            self.updates_since_last_fix += 0
 
     def debug_img(self, function):
-        if not self.debug_mode:
+        if not self.config['debug_images']:
             return
         name = function.__name__
-        if "break" in self.debug_mode:
-            breakpoint()
+        path = self.config['debug_images'].get(name)
+        if not path:
+            return
         img = function()
-        if "save" in self.debug_mode:
-            p = self._debug_path.format(tag=name)
+        p = path.format(**self._debug_format)
+        if isinstance(img, IMG):
+            img.image.save(p)
+        else:
             PIL.Image.fromarray(img).save(p)
-        if "show" in self.debug_mode:
-            cv.imshow(name, img)
-            self._debug_wait_key = True
 
     def parse_image(self, img):
         @self.debug_img
-        def current_screen_grab():
-            return img.rgb
-        done = self.parse_map(img)
-        if not done:
-            done = self.parse_minimap(img)
+        def screenshot():
+            return img
 
-        if done:
-            self.updates_since_last_fix = 0
-        else:
-            self.updates_since_last_fix += 0
+        update = self.parse_map(img)
+        if update:
+            return update
+
+        update = self.parse_minimap(img)
+
+        if update:
+            return update
+        return None
+
 
     def parse_map(self, img):
         black_map_pixels = img.rgb[0:10, 500:510]
         if (black_map_pixels == 0).all():
-            return True  # everything with a large black patch is a map to me
+            return 3100, 2600, 0 # TODO: don't always go to hideout !
 
     def map_features(self):
         x, y = self.pos
@@ -215,7 +180,7 @@ class S2():
         features = self._map_feature_cache.get(key)
         if features is None:
             features = self.akaze.detectAndCompute(
-                self.map.edges[slices], None)
+                self.map_edges[slices], None)
             self._map_feature_cache[key] = features
 
         return features, slices
@@ -258,7 +223,7 @@ class S2():
         if len(good) < 6:
             @self.debug_img
             def minimap_with_match():
-                box = self.map.rgb[offset_slices].copy()
+                box = self.map_edges[offset_slices].copy()
                 op = tuple(self.pos - offset)
                 cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1,)
                 return cv2.drawMatches(
@@ -268,18 +233,17 @@ class S2():
                     map_keypoints,
                     good,
                     None,
-                    flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+                    flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
                 )
-            return True
             logger.debug(
                 "Did not find enough good matches, %d %d",
                 len(matches),
                 len(good))
             return False
 
-        src_pts = np.float32(
+        src_pts = numpy.float32(
             [minimap_keypoints[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-        dst_pts = np.float32(
+        dst_pts = numpy.float32(
             [map_keypoints[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
 
         M = self.get_translation(img, src_pts, dst_pts)
@@ -303,10 +267,7 @@ class S2():
         delta = pos - self.pos
         dist = numpy.linalg.norm(delta)
 
-        heading = -math.atan2(M[0, 1], M[0, 0]) * 180 / math.pi % 360
-
-        old_pos = self.pos
-
+        heading = -math.atan2(M[0, 1], M[0, 0])
 
         @self.debug_img
         def minimap_with_match():
@@ -320,9 +281,9 @@ class S2():
 
             arrow = int(arrow[0]), int(arrow[1])
             bc = tuple(numpy.uint32(position_in_box))
-            op = tuple(old_pos - offset)
+            op = tuple(numpy.array(self.pos) - offset)
 
-            box = self.map.rgb[offset_slices].copy()
+            box = self.map_edges[offset_slices].copy()
 
             cv2.arrowedLine(box, bc, arrow, (0x00, 0xFF, 0xFF), 1,)
 
@@ -334,26 +295,24 @@ class S2():
                 map_keypoints,
                 good,
                 None,
-                flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+                flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
             )
 
         # calculate expected position based on speed, heading and last fix
 
         if dist > 300:
-            logger.info("Discarded %s %d°  moved %f", pos, heading, dist)
+            logger.info("Discarded %s %d°  moved %f", pos, heading * 180 / math.pi % 360, dist)
             return False
 
-        self.pos = pos
-        self.heading = heading
+        logger.info("Position update %s %d°  moved %f", pos, heading * 180 / math.pi % 360, dist)
+        return *pos, heading
 
-        logger.info("Position update %s %d°  moved %f", pos, heading, dist)
-        return True
 
     def get_translation(self, img, src_pts, dst_pts):
-        M, mask = cv.findHomography(
+        M, mask = cv2.findHomography(
             src_pts,
             dst_pts,
-            cv.RANSAC,
+            cv2.RANSAC,
             2,
             None,
             1000,
@@ -369,11 +328,11 @@ class S2():
         h, w = mm.height, mm.width
         cy, cx = h // 2, w // 2
 
-        _, v = cv.threshold(mm.gray, 0xDA, 255, cv.THRESH_BINARY)
-        contours, hierarchy = cv.findContours(
+        _, v = cv2.threshold(mm.gray, 0xDA, 255, cv2.THRESH_BINARY)
+        contours, hierarchy = cv2.findContours(
             v,
-            cv.RETR_TREE,
-            cv.CHAIN_APPROX_SIMPLE,
+            cv2.RETR_TREE,
+            cv2.CHAIN_APPROX_SIMPLE,
         )
 
         for c in contours:
@@ -386,3 +345,7 @@ class S2():
                     return poly
         else:
             return None
+
+
+def create(config, send_update):
+    return PositionUpdater(config, send_update)

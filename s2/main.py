@@ -1,31 +1,19 @@
-from . import s2
-
 import argparse
 import logging
+import logging.config
 import pathlib
+import toml
+import threading
+import io
 
 logger = logging.getLogger(__name__)
 
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(prog=__package__)
-    parser.add_argument('--log-level', '-l',
-                        default="DEBUG",  # TODO: "WARNING",
-                        help="Log Level of Console Output",
-                        )
-    parser.add_argument('--log-file', '-f',
-                        type=pathlib.Path,
-                        help="Log File",
-                        )
-    parser.add_argument('--log-file-level', '-L',
-                        default="INFO",
-                        help="Log File Level",
-                        )
-    parser.add_argument('--save-images', '-s',
-                        help="image dump (~/s2/images/{time}.png)",
-                        )
-    parser.add_argument('--debug-mode', '-d',
-                        help="Show, save, breakpoint",
+    parser.add_argument('--config', '-c',
+                        action='append',
+                        help="Config files .toml",
                         )
     parser.add_argument('tests',
                         nargs="*",
@@ -33,36 +21,53 @@ def get_arg_parser():
                         help="Some Test images to analyze",
                         )
 
+    # TODO: config file.toml
+
     return parser
 
 
-def setup_logging(options):
-    root_logger = logging.getLogger(__package__)
-    root_logger.setLevel(logging.DEBUG)
 
-    ch = logging.StreamHandler()
-    ch.setLevel(options.log_level)
-    ch.setFormatter(logging.Formatter('%(levelname)s:%(name)s: %(message)s'))
-    root_logger.addHandler(ch)
+def load_configs(files):
+    df = []
+    for f in files:
+        p = pathlib.Path(f)
+        if p.is_file:
+            df.append(p)
+        elif "=" in f:
+            df.append(io.StringIO(f)) # TODO: does not work yet
 
-    if options.log_file:
-        fh = logging.FileHandler(options.log_file)
-        fh.setLevel(options.log_file_level)
-        fh.setFormatter(logging.Formatter(
-            '%(filename)s:%(lineno)d:%(levelname)s:%(name)s: %(message)s'))
-        root_logger.addHandler(fh)
+    config = toml.load(df)
+
+    return config
+
+
+def run(config):
+    from . import position_updater
+    from . import gui
+
+    g, send_update = gui.create(config)
+
+    pu =  position_updater.create(config, send_update)
+    put = threading.Thread(target=pu.run, daemon=True)
+    put.start()
+    try:
+        g.run()
+    finally:
+        pass
+        pu.stop()
+        put.join()
 
 
 def main():
     parser = get_arg_parser()
     options = parser.parse_args()
-    setup_logging(options)
+    config = load_configs(options.config)
+
+    logging.config.dictConfig(config['logging'])
     logger.debug(options)
+
     try:
-        if not options.tests:
-            s2.S2(options.save_images, debug_mode=options.debug_mode).run()
-        else:
-            s2.S2(debug_mode=options.debug_mode).test(options.tests)
+        run(config)
 
     except Exception as e:
         logger.exception("Exception while doing stuff")
