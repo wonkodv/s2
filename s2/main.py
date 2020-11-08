@@ -11,20 +11,12 @@ logger = logging.getLogger(__name__)
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(prog=__package__)
-    parser.add_argument('--config', '-c',
-                        action='append',
-                        help="Config files .toml",
-                        )
-    parser.add_argument('tests',
-                        nargs="*",
-                        type=pathlib.Path,
-                        help="Some Test images to analyze",
-                        )
-
-    # TODO: config file.toml
+    parser.add_argument("--config", "-c", action="append", help="Config files .toml")
+    parser.add_argument(
+        "tests", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
+    )
 
     return parser
-
 
 
 def load_configs(files):
@@ -34,7 +26,7 @@ def load_configs(files):
         if p.is_file:
             df.append(p)
         elif "=" in f:
-            df.append(io.StringIO(f)) # TODO: does not work yet
+            df.append(io.StringIO(f))  # TODO: does not work yet
 
     config = toml.load(df)
 
@@ -47,7 +39,7 @@ def run(config):
 
     g, send_update = gui.create(config)
 
-    pu =  position_updater.create(config, send_update)
+    pu = position_updater.create(config, send_update)
     put = threading.Thread(target=pu.run, daemon=True)
     put.start()
     try:
@@ -63,7 +55,7 @@ def main():
     options = parser.parse_args()
     config = load_configs(options.config)
 
-    logging.config.dictConfig(config['logging'])
+    logging.config.dictConfig(config["logging"])
     logger.debug(options)
 
     try:

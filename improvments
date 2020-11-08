@@ -1,0 +1,16 @@
+Precision
+    Project search Box based on heading and speed
+
+Error Recovery
+    keep history of points
+    add confidence to point
+
+
+Performance
+    Decouple
+        Get screenshot
+        analyze screenshot
+        analyze map
+        match
+        validate and improve match
+

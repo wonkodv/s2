@@ -1,3 +1,5 @@
+""" Update Player position by looking at the minimap. """
+
 import PIL.Image
 import cv2
 import datetime
@@ -21,7 +23,7 @@ COORDS = {
 logger = logging.getLogger(__name__)
 
 
-numpy.set_printoptions(formatter={'float': "{:.3f}".format})
+numpy.set_printoptions(formatter={"float": "{:.3f}".format})
 
 
 @functools.lru_cache
@@ -32,13 +34,12 @@ def circle_mask(shape, center=None, radius=None):
         radius = min(*center)
     h, w = shape[:2]
     Y, X = numpy.ogrid[:h, :w]
-    dist_from_center = numpy.sqrt((X - center[0])**2 + (Y - center[1])**2)
+    dist_from_center = numpy.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
     mask = dist_from_center <= radius
     return mask
 
 
-
-class PositionUpdater():
+class PositionUpdater:
     last_minimap = None
     _debug_path = None
     _debug_wait_key = None
@@ -53,16 +54,8 @@ class PositionUpdater():
         self.init = False
         self._map_feature_cache = {}
 
-
-    def setup_hotkeys(self):
-        import hotkey
-        hotkey.start()
-        self.grabHk = hotkey.HotKey("F7", self.update)
-        self.finishHk = hotkey.EventHotKey("F6")
-
     def stop(self):
         self._running = False
-
 
     def _init(self):
         if self.init:
@@ -71,66 +64,44 @@ class PositionUpdater():
         self.map_edges = numpy.array(PIL.Image.open("map_edges.png"))
 
         self.akaze = cv2.AKAZE_create()
-        self.dm = cv2.DescriptorMatcher_create(
-            cv2.DescriptorMatcher_BRUTEFORCE_HAMMING)
+        self.dm = cv2.DescriptorMatcher_create(cv2.DescriptorMatcher_BRUTEFORCE_HAMMING)
 
     def run(self):
-        self._init()
-    
-
-        # self.setup_hotkeys()
-        # self.finishHk.wait()
         logger.info("Starting Screen Grabbing")
+        self._init()
         self._running = True
         while self._running:
             time.sleep(0)
             self.update()
 
-    
-    #TODO: config def test(self, image_paths):
-    #TODO: config     for ip in image_paths:
-    #TODO: config         img = get_test_image(ip)
-    #TODO: config         info = self.parse_image(img)
-    #TODO: config         # print(ip, info)
-    #TODO: config         if self._debug_wait_key:
-    #TODO: config             self._debug_wait_key = False
-    #TODO: config             if 'wait' in self.debug_mode:
-    #TODO: config                 wait = True
-    #TODO: config                 # catch Keyboard Interrupt every 100ms
-    #TODO: config           #      while wait:
-    #TODO: config           #          wait = cv2.waitKey(100) < 0
-    #TODO: config                 cv2.waitKey()
-    #TODO: config             else:
-    #TODO: config                 cv2.waitKey(100)
-
     def update(self):
-        img = get_image(size=(1920,1080)) # TODO: no hardcoded size
+        img = get_image(size=(1920, 1080))  # TODO: no hardcoded size
 
         if not img:
             return
 
-        if self.config['debug_images']:
+        if self.config["debug_images"]:
             self._debug_format = dict(
-                time = time.time(),
-                datetime = datetime.datetime.now(),
+                time=time.time(),
+                datetime=datetime.datetime.now(),
             )
 
         u = self.parse_image(img)
-        if u: 
+        if u:
             self.updates_since_last_fix = 0
-            x,y,alpha = u
+            x, y, alpha = u
             self.pos = x, y
             self.heading = alpha
-            u = Update(x,y,alpha,"PLAYER")
+            u = Update(x, y, alpha, "PLAYER")
             self.send_update(u)
         else:
             self.updates_since_last_fix += 0
 
     def debug_img(self, function):
-        if not self.config['debug_images']:
+        if not self.config["debug_images"]:
             return
         name = function.__name__
-        path = self.config['debug_images'].get(name)
+        path = self.config["debug_images"].get(name)
         if not path:
             return
         img = function()
@@ -155,77 +126,71 @@ class PositionUpdater():
             return update
         return None
 
-
     def parse_map(self, img):
         black_map_pixels = img.rgb[0:10, 500:510]
         if (black_map_pixels == 0).all():
-            return 3100, 2600, 0 # TODO: don't always go to hideout !
+            return 3100, 2600, 0  # TODO: don't always go to hideout !
 
     def map_features(self):
         x, y = self.pos
 
-        # todo: add based on speed and heading ?
-        groups = 64 # cach features for 64 by 64 pixel blocks.
+        # TODO: add based on speed and heading ?
+        groups = 64  # cach features for 64 by 64 pixel blocks.
         box_size = 512
 
-        x |= groups-1
-        y |= groups-1
+        x |= groups - 1
+        y |= groups - 1
 
         slices = (
-            slice(y - box_size//2 - groups//2, y + box_size//2 - groups//2),
-            slice(x - box_size//2 - groups//2, x + box_size//2 - groups//2),
+            slice(y - box_size // 2 - groups // 2, y + box_size // 2 - groups // 2),
+            slice(x - box_size // 2 - groups // 2, x + box_size // 2 - groups // 2),
         )
 
         key = x, y
         features = self._map_feature_cache.get(key)
         if features is None:
-            features = self.akaze.detectAndCompute(
-                self.map_edges[slices], None)
+            features = self.akaze.detectAndCompute(self.map_edges[slices], None)
             self._map_feature_cache[key] = features
 
         return features, slices
 
     def parse_minimap(self, img):
         coords = COORDS[(img.width, img.height)]
-        cx, cy = coords['minimap_center']
-        r = coords['minimap_radius']
+        cx, cy = coords["minimap_center"]
+        r = coords["minimap_radius"]
 
-        minimap = IMG(rgb=img.rgb[cx - r:cx + r, cy - r:cy + r, :])
+        minimap = IMG(rgb=img.rgb[cx - r : cx + r, cy - r : cy + r, :])
 
         a = self.get_minimap_arrow(minimap)
         if a is None:
             return False
 
-        #outer_mask = circle_mask(shape)
-        #inner_mask = circle_mask(shape, radius=15)
-        #mask = ~(inner_mask & outer_mask)
+        # outer_mask = circle_mask(shape)
+        # inner_mask = circle_mask(shape, radius=15)
+        # mask = ~(inner_mask & outer_mask)
         # https://docs.opencv.org/master/db/d70/tutorial_akaze_matching.html
-        minimap_keypoints, minimap_descriptors = (
-            self.akaze.detectAndCompute(
-                minimap.edges,
-                None,  # TODO: Mask
-            )
+        minimap_keypoints, minimap_descriptors = self.akaze.detectAndCompute(
+            minimap.edges,
+            None,  # TODO: Mask
         )
 
-        (map_keypoints, map_descriptors), offset_slices = (
-            self.map_features()
-        )
+        (map_keypoints, map_descriptors), offset_slices = self.map_features()
 
         offset = numpy.array([offset_slices[1].start, offset_slices[0].start])
 
         matches = self.dm.knnMatch(minimap_descriptors, map_descriptors, 2)
-        good = [m for m, n in matches
-                if m.distance < 0.8 * n.distance]
+        good = [m for m, n in matches if m.distance < 0.8 * n.distance]
 
         # TODO: calculate center of good, then filter map_features by distance
         # and match again
 
         if len(good) < 6:
+
             @self.debug_img
             def minimap_with_match():
                 box = self.map_edges[offset_slices].copy()
                 op = tuple(self.pos - offset)
-                cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1,)
+                cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1)
                 return cv2.drawMatches(
                     minimap.rgb,
                     minimap_keypoints,
@@ -235,16 +200,18 @@ class PositionUpdater():
                     None,
                     flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
                 )
+
             logger.debug(
-                "Did not find enough good matches, %d %d",
-                len(matches),
-                len(good))
+                "Did not find enough good matches, %d %d", len(matches), len(good)
+            )
             return False
 
         src_pts = numpy.float32(
-            [minimap_keypoints[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+            [minimap_keypoints[m.queryIdx].pt for m in good],
+        ).reshape(-1, 1, 2)
         dst_pts = numpy.float32(
-            [map_keypoints[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+            [map_keypoints[m.trainIdx].pt for m in good],
+        ).reshape(-1, 1, 2)
 
         M = self.get_translation(img, src_pts, dst_pts)
         if M is None:
@@ -285,9 +252,9 @@ class PositionUpdater():
 
             box = self.map_edges[offset_slices].copy()
 
-            cv2.arrowedLine(box, bc, arrow, (0x00, 0xFF, 0xFF), 1,)
+            cv2.arrowedLine(box, bc, arrow, (0x00, 0xFF, 0xFF), 1)
 
-            cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1,)
+            cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1)
             return cv2.drawMatches(
                 minimap.rgb,
                 minimap_keypoints,
@@ -301,12 +268,21 @@ class PositionUpdater():
         # calculate expected position based on speed, heading and last fix
 
         if dist > 300:
-            logger.info("Discarded %s %d°  moved %f", pos, heading * 180 / math.pi % 360, dist)
+            logger.info(
+                "Discarded %s %d°  moved %f",
+                pos,
+                heading * 180 / math.pi % 360,
+                dist,
+            )
             return False
 
-        logger.info("Position update %s %d°  moved %f", pos, heading * 180 / math.pi % 360, dist)
+        logger.info(
+            "Position update %s %d°  moved %f",
+            pos,
+            heading * 180 / math.pi % 360,
+            dist,
+        )
         return *pos, heading
-
 
     def get_translation(self, img, src_pts, dst_pts):
         M, mask = cv2.findHomography(
@@ -316,11 +292,12 @@ class PositionUpdater():
             2,
             None,
             1000,
-            0.999)
+            0.999,
+        )
         return M
 
     def get_minimap_arrow(self, mm):
-        """ Look for the Minimap Arrow.
+        """Look for the Minimap Arrow.
 
         Finds contours of white area, approximates a Poly and selects one that
         is in the middle of the map and has 3 corners.

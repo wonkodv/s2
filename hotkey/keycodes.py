@@ -144,10 +144,10 @@ KEY_CODES = {
     "ZOOM": 0xFB,
     "NONAME": 0xFC,
     "PA1": 0xFD,
-    "OEM_CLEAR": 0xFE
+    "OEM_CLEAR": 0xFE,
 }
 
-for x in '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+for x in "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ":
     KEY_CODES[x] = ord(x)
 
 KEY_NAMES = {name: code for (code, name) in KEY_CODES.items()}

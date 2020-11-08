@@ -17,13 +17,13 @@ WM_STOP = WM_USER + 1
 WM_NOTIFY = WM_USER + 2
 
 MODIFIERS = {
-    'ALT': 1,
-    'MENU': 1,
-    'CTRL': 2,
-    'CONTROL': 2,
-    'SHIFT': 4,
-    'MOD4': 8,
-    'WIN': 8
+    "ALT": 1,
+    "MENU": 1,
+    "CTRL": 2,
+    "CONTROL": 2,
+    "SHIFT": 4,
+    "MOD4": 8,
+    "WIN": 8,
 }
 
 _next_id = 0
@@ -36,9 +36,7 @@ HK_WORKER_THREAD_ID = None
 def do_in_hk_thread(f):
     def wrapper(*args, **kwargs):
         if HK_WORKER_THREAD is None:
-            raise Exception(
-                "No Hotkey Worker Thread",
-                threading.current_thread())
+            raise Exception("No Hotkey Worker Thread", threading.current_thread())
 
         t = threading.current_thread()
 
@@ -50,8 +48,7 @@ def do_in_hk_thread(f):
         po = py_object(data)
         lp = LPARAM(addressof(po))
         # hold on to lp in local variable so data stays valid
-        if not windll.user32.PostThreadMessageW(
-                HK_WORKER_THREAD_ID, WM_NOTIFY, 0, lp):
+        if not windll.user32.PostThreadMessageW(HK_WORKER_THREAD_ID, WM_NOTIFY, 0, lp):
             raise WinError()
 
         if not e.wait(timeout=5):
@@ -60,6 +57,7 @@ def do_in_hk_thread(f):
         if e._exception:
             raise e._exception
         return e._result
+
     return wrapper
 
 
@@ -127,20 +125,19 @@ def start():
 
 def stop():
     assert HK_WORKER_THREAD
-    if not windll.user32.PostThreadMessageW(
-            HK_WORKER_THREAD_ID, WM_STOP, 0, 0):
+    if not windll.user32.PostThreadMessageW(HK_WORKER_THREAD_ID, WM_STOP, 0, 0):
         raise WinError()
 
 
 def translate(s):
     """Translate a String like ``Ctrl + A`` into the virtual Key Code and modifiers."""
-    parts = s.split('+')
+    parts = s.split("+")
     parts = [s.strip() for s in parts]
     try:
         vk = KEY_CODES[parts[-1]]
     except KeyError:
         vk = parts[-1]
-        if vk.startswith('0x'):
+        if vk.startswith("0x"):
             vk = int(vk, 0)
         else:
             raise

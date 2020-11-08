@@ -8,7 +8,7 @@ import time
 from ctypes.wintypes import RECT, POINT, HWND, LPARAM, DWORD, BOOL
 from ctypes import c_wchar, c_bool, byref
 
-Rect = collections.namedtuple('Rect', 'left,top,right,bottom,width,height')
+Rect = collections.namedtuple("Rect", "left,top,right,bottom,width,height")
 
 
 class Window:
@@ -64,10 +64,10 @@ class Window:
 
     @classmethod
     def complete(cls, s):
-        yield '_MOUSE_POS_MAIN'
-        yield '_MOUSE_POS'
-        yield '_WAIT_FOREGROUND'
-        yield '_FOREGROUND'
+        yield "_MOUSE_POS_MAIN"
+        yield "_MOUSE_POS"
+        yield "_WAIT_FOREGROUND"
+        yield "_FOREGROUND"
         for w in cls.TOP.children:
             yield w.class_name
             yield w.title
@@ -78,9 +78,9 @@ class Window:
             w = cls.get_window_from_point(main=True)
         elif s == "_MOUSE_POS":
             w = cls.get_window_from_point()
-        elif s == '_FOREGROUND':
+        elif s == "_FOREGROUND":
             w = cls.get_foreground_window()
-        elif s == '_WAIT_FOREGROUND':
+        elif s == "_WAIT_FOREGROUND":
             w = org = cls.get_foreground_window()
             while w == org:
                 time.sleep(0.1)
@@ -122,7 +122,9 @@ class Window:
         p = byref(r)
         if not ctypes.windll.user32.GetWindowRect(self.hwnd, p):
             raise ctypes.WinError()
-        return Rect(r.left, r.top, r.right, r.bottom, r.right - r.left, r.bottom - r.top)
+        return Rect(
+            r.left, r.top, r.right, r.bottom, r.right - r.left, r.bottom - r.top
+        )
 
     @property
     def text(self):
@@ -238,17 +240,18 @@ class Window:
             raise ctypes.WinError()
 
     _setwindowpos_after = dict(BOTTOM=1, TOP=0, TOPMOST=-1, NOTOPMOST=-2)
-    _setwindowpos_flags = dict(SHOW=0x40, HIDE=0x80, NOACTIVATE=0x10,)
+    _setwindowpos_flags = dict(SHOW=0x40, HIDE=0x80, NOACTIVATE=0x10)
 
     def set_pos(
-            self,
-            *,
-            after=...,
-            left=...,
-            top=...,
-            width=...,
-            height=...,
-            flags=0):
+        self,
+        *,
+        after=...,
+        left=...,
+        top=...,
+        width=...,
+        height=...,
+        flags=0,
+    ):
         """Set position and Placement Flags using SetWindowPos."""
         after = self._setwindowpos_after.get(after, after)
         flags = self._setwindowpos_flags.get(flags, flags)
@@ -268,7 +271,8 @@ class Window:
             after = 0
 
         if not ctypes.windll.user32.SetWindowPos(
-                self.hwnd, after, left, top, width, height, flags):
+            self.hwnd, after, left, top, width, height, flags
+        ):
             ctypes.WinError()
 
     _show_window_command = dict(
@@ -328,6 +332,7 @@ class Window:
                 nonlocal exc
                 exc = e
                 return False
+
         r = ctypes.windll.user32.EnumChildWindows(self.hwnd, _cb, 0)
 
         if result is not None:
@@ -336,7 +341,7 @@ class Window:
         if exc:
             raise exc
 
-        if not r:       # EnumChildWindows returned an error although all _cb returned True
+        if not r:  # EnumChildWindows returned an error although all _cb returned True
             raise ctypes.WinError()
 
     def find(self, spec=..., *, after=None, class_name=None, title=None):
@@ -348,22 +353,21 @@ class Window:
 
         if spec is ...:
             w = ctypes.windll.user32.FindWindowExW(
-                self.hwnd, after.hwnd, class_name, title)
+                self.hwnd, after.hwnd, class_name, title
+            )
             if not w:
                 raise KeyError(
-                    "No Window with title and class",
-                    self,
-                    class_name,
-                    title)
+                    "No Window with title and class", self, class_name, title
+                )
         else:
             if class_name or title:
                 raise TypeError("spec and tile or class_name passed")
 
-            w = ctypes.windll.user32.FindWindowExW(
-                self.hwnd, after.hwnd, spec, None)
+            w = ctypes.windll.user32.FindWindowExW(self.hwnd, after.hwnd, spec, None)
             if not w:
                 w = ctypes.windll.user32.FindWindowExW(
-                    self.hwnd, after.hwnd, None, spec)
+                    self.hwnd, after.hwnd, None, spec
+                )
             if not w:
                 raise KeyError("No Window with title or class", self, spec)
         return type(self)(w)
@@ -376,6 +380,7 @@ class Window:
             if regex.search(w.title):
                 return w
             return None
+
         return self.enumerate(cb)
 
     # Magic
@@ -398,7 +403,8 @@ class Window:
     def __repr__(self):
         if self:
             return "Window(hwnd={self:#X}, class_name={self.class_name!r}, text={self.title!r})".format(
-                self=self)
+                self=self
+            )
         return "Window(hwnd={self.hwnd:#X}, INVALID)".format(self=self)
 
     def __format__(self, spec):

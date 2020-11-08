@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 __all__ = (
-    'HotKey',
-    'EventHotKey',
-    'HotKeyError',
-    'disable_all_hotkeys',
-    'enable_all_hotkeys',
-    'get_hotkey',
+    "HotKey",
+    "EventHotKey",
+    "HotKeyError",
+    "disable_all_hotkeys",
+    "enable_all_hotkeys",
+    "get_hotkey",
 )
 
 _Lock = threading.Lock()
@@ -41,6 +41,7 @@ class HotKey:
     Use inside a with block to takes care of calling register and free (can
     only be used once)
     """
+
     HOTKEYS = weakref.WeakValueDictionary()
 
     def __init__(self, hotkey, callback, *args, **kwargs):
@@ -113,12 +114,12 @@ class HotKey:
 
     def __repr__(self):
         return "HotKey({0}, active={1}, callback={2})".format(
-            self.hotkey, self.active,
-            self._callback.__qualname__)
+            self.hotkey, self.active, self._callback.__qualname__
+        )
 
 
 class EventHotKey(HotKey):
-    """ A hotkey that acts as a threading Event.
+    """A hotkey that acts as a threading Event.
 
     Wait until Hotkey is pressed, Clear and wait again.
 
@@ -168,7 +169,8 @@ class EventHotKey(HotKey):
 
     def __repr__(self):
         return "EventHotKey({}, {})".format(
-            self.hotkey, "Set" if self.evt.is_set() else "NotSet")
+            self.hotkey, "Set" if self.evt.is_set() else "NotSet"
+        )
 
     def __del__(self):
         self.evt.set()  # Should not be needed, but otherwise deadlocks show up :-/
@@ -190,6 +192,7 @@ def loop():
     impl.loop()
     logger.info("Hotkey Processing Stopped")
     _Started = False
+
 
 def stop():
     logger.info("Stopping")

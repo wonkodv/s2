@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 Update = collections.namedtuple("Update", "x y alpha id")
 
-class IMG():
+
+class IMG:
     """Collection of the various ways a image can be represented."""
 
     def __init__(self, *, image=None, rgb=None):
@@ -32,7 +33,6 @@ class IMG():
     @cache
     def from_path(cls, p):
         return cls(image=PIL.Image.open(p))
-
 
     @property
     def image(self):
@@ -52,7 +52,7 @@ class IMG():
 
     @cached_property
     def smooth(self):
-        return cv2.fastNlMeansDenoising(self.gray, 30, 7, 11, )
+        return cv2.fastNlMeansDenoising(self.gray, 30, 7, 11)
 
     @cached_property
     def edges(self):
@@ -74,14 +74,13 @@ def get_image(title=None, size=None):
         l.info("Not real window %r", wnd)
         return None
 
-
     if title and wnd.text != title:
         logger.info("Title MisMatch %s %r", title, wnd)
         return None
 
     *r, w, h = wnd.rect
-       
-    if size and size != (w,h):
+
+    if size and size != (w, h):
         l.info("Size Mismatch %s, %r", r, wnd)
         return None
 
@@ -90,6 +89,3 @@ def get_image(title=None, size=None):
     t = time.perf_counter() - t
     l.debug("Screen Grab took %.6f seconds, %r", t, wnd)
     return img
-
-
-
