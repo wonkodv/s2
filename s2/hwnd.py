@@ -4,9 +4,8 @@ import collections
 import ctypes
 import re
 import time
-
-from ctypes.wintypes import RECT, POINT, HWND, LPARAM, DWORD, BOOL
-from ctypes import c_wchar, c_bool, byref
+from ctypes import byref, c_wchar
+from ctypes.wintypes import BOOL, DWORD, HWND, LPARAM, POINT, RECT
 
 Rect = collections.namedtuple("Rect", "left,top,right,bottom,width,height")
 
@@ -144,7 +143,6 @@ class Window:
     @property
     def thread_id(self):
         """ID of the Thread owning the Window."""
-        procid = DWORD()
         threadid = ctypes.windll.user32.GetWindowThreadProcessId(self.hwnd, 0)
         return threadid
 

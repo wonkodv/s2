@@ -1,8 +1,7 @@
-import queue
+import logging
 import threading
 import time
 import weakref
-import logging
 
 from . import windows as impl
 
@@ -13,9 +12,6 @@ __all__ = (
     "HotKey",
     "EventHotKey",
     "HotKeyError",
-    "disable_all_hotkeys",
-    "enable_all_hotkeys",
-    "get_hotkey",
 )
 
 _Lock = threading.Lock()
@@ -65,15 +61,12 @@ class HotKey:
 
     def _do_callback(self):
         self.logger.debug("invoked")
-        try:
-            self._callback(*self._args, **self._kwargs)
-        except Exception as e:
-            raise
+        self._callback(*self._args, **self._kwargs)
 
     def register(self):
         with _Lock:
             if not _Started:
-                raise HotkeyError("Not started")
+                raise HotKeyError("Not started")
             if self.active:
                 raise HotKeyError("Already active")
             impl.register(self)
@@ -83,7 +76,7 @@ class HotKey:
     def unregister(self):
         with _Lock:
             if not _Started:
-                raise HotkeyError("Not started")
+                raise HotKeyError("Not started")
             if not self.active:
                 raise HotKeyError("Already deactivated")
             impl.unregister(self)

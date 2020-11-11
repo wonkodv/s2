@@ -1,14 +1,24 @@
+import collections
+import collections.abc
+import logging
+import sys
+import time
+from functools import cached_property
+
+import cv2
+import numpy
 import PIL.Image
 import PIL.ImageGrab
 import PIL.ImageTk
-import cv2
-import logging
-import numpy
-import time
-import collections
 
-from functools import cache, cached_property
-from hwnd import Window
+if sys.platform == "win32":
+    from .hwnd import Window
+
+if sys.version_info < (3, 9):
+    from functools import lru_cache as cache  # TODO: move to python 3.9?
+else:
+    from functools import cache
+
 
 logger = logging.getLogger(__name__)
 
@@ -66,28 +76,28 @@ class IMG:
 def get_image(title=None, size=None):
     """Screenshot current ForeGroundWin if it matches."""
 
-    l = logger.getChild("get_image")
+    func_logger = logger.getChild("get_image")
     t = time.perf_counter()
     wnd = Window.get_foreground_window()
 
     if not wnd:
-        l.info("Not real window %r", wnd)
+        func_logger.info("Not real window %r", wnd)
         return None
 
     if title and wnd.text != title:
-        logger.info("Title MisMatch %s %r", title, wnd)
+        func_logger.info("Title MisMatch %s %r", title, wnd)
         return None
 
     *r, w, h = wnd.rect
 
     if size and size != (w, h):
-        l.info("Size Mismatch %s, %r", r, wnd)
+        func_logger.info("Size Mismatch %s, %r", r, wnd)
         return None
 
     img = PIL.ImageGrab.grab(r, all_screens=True)
     img = IMG(image=img)
     t = time.perf_counter() - t
-    l.debug("Screen Grab took %.6f seconds, %r", t, wnd)
+    func_logger.debug("Screen Grab took %.6f seconds, %r", t, wnd)
     return img
 
 

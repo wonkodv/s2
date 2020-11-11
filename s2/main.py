@@ -2,10 +2,8 @@ import argparse
 import logging
 import logging.config
 import pathlib
-import threading
-
-import toml
 import pprint
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +43,15 @@ def main():
     config = load_configs(options.config)
     logging.config.dictConfig(config["logging"])
 
-    if config['debug']['log_args']:
+    if config["debug"]["log_args"]:
         logger.debug("Arguments: \n%s", pprint.pformat(options))
 
-    if config['debug']['log_config']:
+    if config["debug"]["log_config"]:
         logger.debug("Config: \n%s", pprint.pformat(config, indent=4, sort_dicts=True))
 
     try:
         run(config)
-    except Exception as e:
+    except Exception:
         logger.exception("Exception while doing stuff")
         return 1
     return 0

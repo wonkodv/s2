@@ -1,1 +1,1 @@
-from .hotkey import *
+from .hotkey import *  # noqa

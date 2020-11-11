@@ -2,7 +2,7 @@ import pytest
 
 from s2.util import merge_recursive_dict
 
-### Merge dict
+# Merge dict
 
 old = dict(
     a="old a",

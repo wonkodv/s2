@@ -1,10 +1,8 @@
-import tkinter
-import queue
 import math
+import queue
+import tkinter
 
-
-from .util import *
-
+from .util import IMG
 
 COLORS = {
     "PLAYER": "orange",

@@ -1,15 +1,10 @@
 """Hotkeys on the Windows Plattform."""
 
-import queue
-import time
 import threading
-
-
-from ctypes import windll, byref, WinError, py_object, addressof
-from ctypes.wintypes import MSG, LPARAM
+from ctypes import WinError, addressof, byref, py_object, windll
+from ctypes.wintypes import LPARAM, MSG
 
 from .keycodes import KEY_CODES
-
 
 WM_HOTKEY = 0x312
 WM_USER = 0x0400
@@ -90,11 +85,11 @@ def prepare():
 
 
 def loop():
+    global HK_WORKER_THREAD, HK_WORKER_THREAD_ID
     try:
         msg = MSG()
         lpmsg = byref(msg)
 
-        t = threading.current_thread()
         while windll.user32.GetMessageW(lpmsg, 0, 0, 0):
             if msg.message == WM_HOTKEY:
                 hk = HOTKEYS_BY_ID[msg.wParam]

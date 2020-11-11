@@ -1,17 +1,17 @@
 """ Update Player position by looking at the minimap. """
 
-import PIL.Image
-import cv2
 import datetime
 import functools
 import logging
+import math
+import time
+
+import cv2
 import numpy
 import numpy.linalg
-import pathlib
-import time
-import math
+import PIL.Image
 
-from .util import *
+from .util import IMG, Update, get_image
 
 COORDS = {
     (1920, 1080): {
@@ -187,7 +187,7 @@ class PositionUpdater:
         if len(good) < 6:
 
             @self.debug_img
-            def minimap_with_match():
+            def minimap_with_too_few_matches():
                 box = self.map_edges[offset_slices].copy()
                 op = tuple(self.pos - offset)
                 cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1)
@@ -237,7 +237,7 @@ class PositionUpdater:
         heading = -math.atan2(M[0, 1], M[0, 0])
 
         @self.debug_img
-        def minimap_with_match():
+        def minimap_with_matches():
 
             arrow = [minimap.width / 2, 0, 1]
             arrow = M @ arrow
@@ -303,7 +303,6 @@ class PositionUpdater:
         is in the middle of the map and has 3 corners.
         """
         h, w = mm.height, mm.width
-        cy, cx = h // 2, w // 2
 
         _, v = cv2.threshold(mm.gray, 0xDA, 255, cv2.THRESH_BINARY)
         contours, hierarchy = cv2.findContours(
