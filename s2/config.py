@@ -3,6 +3,8 @@ import logging
 
 import toml
 
+from .util import merge_recursive_dict
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
@@ -48,9 +50,6 @@ DEFAULT_CONFIG = {
 
 
 def load_configs(files):
-    from .config import DEFAULT_CONFIG
-    from .util import merge_recursive_dict
-
     config = DEFAULT_CONFIG
 
     for file_name in files:

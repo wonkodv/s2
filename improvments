@@ -1,5 +1,6 @@
 Precision
     Project search Box based on heading and speed
+    When matching Keypoints, calculate Center, and match again against keypoints in that area
 
 Error Recovery
     keep history of points
@@ -7,10 +8,16 @@ Error Recovery
 
 
 Performance
-    Decouple
-        Get screenshot
-        analyze screenshot
-        analyze map
-        match
-        validate and improve match
+    Get Screenshot only from Minimap Area 
+    move Debug functions to other thread
 
+    Pipeline using Queues of size 1, clearing output Q if not consumed:
+          > A   Get screenshot
+        A > B   analyze screenshot
+          > C   analyze map
+        B,C > D match
+        D,C2 >  validate and improve match
+
+    
+    Put Keypoints for 64 pixel squares in bins, stored in a dict and then match
+    against several bins
