@@ -1,50 +1,65 @@
-import pathlib
+#!/usr/bin/python
+""" Download the gta map."""
+
+import concurrent.futures
+import io
+import sys
+import typing
+
+import numpy
+import PIL.Image
 import requests
 
+TILE_RESOLUTION = 256
 
-p = pathlib.Path(".")
-s = []
-for y in range(32):
-    for x in range(32):
-        i = p / f"{x:02d}x{y:02d}.jpg"
-        if not i.exists():
-            print(f"Download {i}")
-            i.write_bytes(
-                requests.get(
-                    "https://media.gtanet.com/gta4/images/map/tiles/5_{:02d}.jpg".format(
-                        32 * y + x + 1
-                    )
-                ).content
-            )
-        s.append(f"<img src='{i}'>")
-    s.append("<br>")
 
-s = "".join(s)
+class Scale(typing.NamedTuple):
+    index: int
 
-(p / "index.html").write_text(
-    """
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-img {
-padding:0;
-margin:0;
-}
-body {
-overflow:scroll;
-line-height:0;
-}
+    @property
+    def tiles_per_axis(self):
+        return 2 ** self.index
 
-</style>
-</head>
-<body>
-<pre>
-"""
-    + s
-    + """
-</pre>
-</body>
-</html>
-"""
-)
+    @property
+    def resolution(self):
+        return TILE_RESOLUTION * self.tiles_per_axis
+
+
+assert Scale(5).tiles_per_axis == 32
+assert Scale(4).tiles_per_axis == 16
+
+
+def get_image(x, y, scale):
+    index = scale.tiles_per_axis * y + x + 1
+    url = (
+        f"https://media.gtanet.com/gta4/images/map/tiles/{scale.index}_{index:02d}.jpg"
+    )
+    img_data = requests.get(url).content
+    img_io = io.BytesIO(img_data)
+    return PIL.Image.open(img_io)
+
+
+def main(scale="2"):
+    scale = Scale(int(scale))
+
+    img = numpy.zeros((scale.resolution, scale.resolution, 3), dtype=numpy.uint8)
+
+    tile_coords = [
+        (x, y) for x in range(scale.tiles_per_axis) for y in range(scale.tiles_per_axis)
+    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as threadpool:
+        tiles = threadpool.map(
+            lambda coord: (coord, get_image(*coord, scale)),
+            tile_coords,
+        )
+        for (x, y), tile in tiles:
+            x = x * TILE_RESOLUTION
+            y = y * TILE_RESOLUTION
+            img[y : y + TILE_RESOLUTION, x : x + TILE_RESOLUTION] = tile
+
+    PIL.Image.fromarray(img).save(f"map{scale.resolution}.png")
+
+
+if __name__ == "__main__":
+    sys.exit(main(*sys.argv[1:]))
