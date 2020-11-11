@@ -2,9 +2,10 @@ import argparse
 import logging
 import logging.config
 import pathlib
-import toml
 import threading
-import io
+
+import toml
+import pprint
 
 logger = logging.getLogger(__name__)
 
@@ -19,23 +20,8 @@ def get_arg_parser():
     return parser
 
 
-def load_configs(files):
-    df = []
-    for f in files:
-        p = pathlib.Path(f)
-        if p.is_file:
-            df.append(p)
-        elif "=" in f:
-            df.append(io.StringIO(f))  # TODO: does not work yet
-
-    config = toml.load(df)
-
-    return config
-
-
 def run(config):
-    from . import position_updater
-    from . import gui
+    from . import gui, position_updater
 
     g, send_update = gui.create(config)
 
@@ -53,14 +39,20 @@ def run(config):
 def main():
     parser = get_arg_parser()
     options = parser.parse_args()
-    config = load_configs(options.config)
 
+    from .config import load_configs
+
+    config = load_configs(options.config)
     logging.config.dictConfig(config["logging"])
-    logger.debug(options)
+
+    if config['debug']['log_args']:
+        logger.debug("Arguments: \n%s", pprint.pformat(options))
+
+    if config['debug']['log_config']:
+        logger.debug("Config: \n%s", pprint.pformat(config, indent=4, sort_dicts=True))
 
     try:
         run(config)
-
     except Exception as e:
         logger.exception("Exception while doing stuff")
         return 1

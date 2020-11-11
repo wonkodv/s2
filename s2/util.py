@@ -89,3 +89,34 @@ def get_image(title=None, size=None):
     t = time.perf_counter() - t
     l.debug("Screen Grab took %.6f seconds, %r", t, wnd)
     return img
+
+
+def merge_recursive_dict(old, new):
+    """Merge two dictionaries recursively.
+
+    Produces a Tree of new dictionaries, at each level values from new overwrite
+    values from old.
+    Fails if for the same key one as a dict and the other something else.
+    If one has a dictionary for a key and the other has no entry, that dict
+    becomes part of the tree without copy.
+
+    """
+    old_is_dict = isinstance(old, collections.abc.Mapping)
+    new_is_dict = isinstance(new, collections.abc.Mapping)
+
+    if old_is_dict and new_is_dict:
+        keep = old.keys() - new.keys()
+        add = new.keys() - old.keys()
+        merge = new.keys() & old.keys()
+
+        return dict(
+            (
+                *((k, old[k]) for k in keep),
+                *((k, new[k]) for k in add),
+                *((k, merge_recursive_dict(old[k], new[k])) for k in merge),
+            )
+        )
+    elif not old_is_dict and not new_is_dict:
+        return new
+    else:
+        raise TypeError("Either both or neither arguments must be dicts", old, new)
