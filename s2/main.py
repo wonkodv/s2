@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(prog=__package__)
-    parser.add_argument("--config", "-c", action="append", help="Config files .toml")
+    parser.add_argument(
+        "--config", "-c", action="append", help="Config files .toml", default=()
+    )
     parser.add_argument(
         "tests", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
     )
