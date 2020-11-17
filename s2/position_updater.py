@@ -11,6 +11,8 @@ import numpy
 import numpy.linalg
 import PIL.Image
 
+import s2.parse_map
+
 from .util import IMG, Update, get_image
 
 COORDS = {
@@ -21,7 +23,6 @@ COORDS = {
 }
 
 logger = logging.getLogger(__name__)
-
 
 numpy.set_printoptions(formatter={"float": "{:.3f}".format})
 
@@ -116,20 +117,22 @@ class PositionUpdater:
         def screenshot():
             return img
 
+        update = self.parse_minimap(img)
+        if update:
+            return update
+
         update = self.parse_map(img)
         if update:
             return update
 
-        update = self.parse_minimap(img)
-
-        if update:
-            return update
         return None
 
     def parse_map(self, img):
-        black_map_pixels = img.rgb[0:10, 500:510]
-        if (black_map_pixels == 0).all():
-            return 3100, 2600, 0  # TODO: don't always go to hideout !
+        relPos = s2.parse_map.parse_map(img)
+        if relPos:
+            a = relPos.absolute()
+            r2 = a.relative("map8192x8192")
+            return r2.x, r2.y, r2.heading
 
     def map_features(self):
         x, y = self.pos
