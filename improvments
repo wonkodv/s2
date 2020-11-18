@@ -5,19 +5,37 @@ Precision
 Error Recovery
     keep history of points
     add confidence to point
-
+    ignore outliers
 
 Performance
-    Get Screenshot only from Minimap Area 
-    move Debug functions to other thread
+    Get Screenshot only from Minimap Area. if black, get position from Map
+    Put Debug Objects in a Queue and handle asynchronously.
 
-    Pipeline using Queues of size 1, clearing output Q if not consumed:
+    Pipeline with adjusting speed of computation:
           > A   Get screenshot
         A > B   analyze screenshot
           > C   analyze map
         B,C > D match
         D,C2 >  validate and improve match
 
-    
     Put Keypoints for 64 pixel squares in bins, stored in a dict and then match
-    against several bins
+    against several bins instead of detetcing keypoints again.
+
+
+Tasks:
+    Move to pipeline:
+        create side-effect free functions:
+            [x] global config
+            [x] get_image()
+            [ ] get_keypoints_from_minimap(minimap_image)
+            [ ] match_keypoints(minimap_keypoints, map_keypoints)
+            [ ] validate_match(match_points)
+            [x] get_keypoints_from_map_area()
+            [ ] update_position(new_position, confidence)
+
+        [x] Create Pipeline Manager:
+            1 thread per function
+            get info from Q / sleep for a while
+            call function
+            put result on next Q
+
