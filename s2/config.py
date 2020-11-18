@@ -8,10 +8,15 @@ from .util import merge_recursive_dict
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
+    "get_image": {
+        "title": "GTAIV",
+        "size": (1920, 1080),
+    },
     "debug": {
-        "save_images": {"screenshot": "images/{time}.png", "current_screen_grab": ""},
+        "save_images": {"screenshot": False},
         "log_config": False,
         "log_args": False,
+        "images": [],  # paths to use instead of screenshots for testing
     },
     "logging": {
         "version": 1,
@@ -48,13 +53,25 @@ DEFAULT_CONFIG = {
     },
 }
 
+_the_config = DEFAULT_CONFIG
+
 
 def load_configs(files):
     config = DEFAULT_CONFIG
+
+    global _the_config
 
     for file_name in files:
         if isinstance(file_name, str) and "=" in file_name:
             file_name = io.StringIO(file_name)
         d = toml.load(file_name)
         config = merge_recursive_dict(config, d)
-    return config
+    _the_config = config
+    return config  # TODO: do not return Value, use `get_config`
+
+
+def get_config(*keys):
+    val = _the_config
+    for k in keys:
+        val = val[k]
+    return val

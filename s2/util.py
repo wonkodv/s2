@@ -18,7 +18,7 @@ else:
 
 logger = logging.getLogger(__name__)
 
-Update = collections.namedtuple("Update", "x y alpha id")
+Update = collections.namedtuple("Update", "position id")
 
 
 class IMG:

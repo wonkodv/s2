@@ -15,7 +15,11 @@ class GUI:
         self.root = tkinter.Tk()
         self.root.title("Second Screen ")
         self.root.bind("<Configure>", self.resize)
-        self.root.state("zoomed")
+        try:
+            self.root.state("zoomed")
+        except tkinter.TclError:
+            pass
+
         self.frame = f = tkinter.Frame(self.root)
         f.pack(fill=tkinter.BOTH, expand=True)
 
@@ -55,14 +59,14 @@ class GUI:
     def update(self, u):
         assert u.id == "PLAYER"
 
-        player_x = u.x
-        player_y = u.y
+        player_x = u.position.x
+        player_y = u.position.y
 
         center_x = self.frame.winfo_width() // 2
         center_y = self.frame.winfo_height() // 2
 
-        arrow_x = center_x + 20 * math.sin(u.alpha)
-        arrow_y = center_y - 20 * math.cos(u.alpha)
+        arrow_x = center_x + 20 * math.sin(u.position.heading)
+        arrow_y = center_y - 20 * math.cos(u.position.heading)
 
         self.canvas.coords(self.player_widget, (center_x, center_y, arrow_x, arrow_y))
 

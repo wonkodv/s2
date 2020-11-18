@@ -66,8 +66,7 @@ def get_image(area=None):
     if area:
         x, y = r[:2]
         l, t, r, b = area
-        r = l+x, t+y, r+x, t+y
-
+        r = l + x, t + y, r + x, t + y
 
     img = PIL.ImageGrab.grab(r, all_screens=True)
     img = IMG(image=img)

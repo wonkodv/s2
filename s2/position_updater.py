@@ -12,8 +12,9 @@ import numpy.linalg
 import PIL.Image
 
 import s2.parse_map
-
-from .util import IMG, Update, get_image
+from s2.coords import RelativePosition
+from s2.get_image import get_image
+from s2.util import IMG, Update
 
 COORDS = {
     (1920, 1080): {
@@ -21,6 +22,9 @@ COORDS = {
         "minimap_radius": 80,
     }
 }
+
+
+NOT_A_MINIMAP = "NOT A MINIMAP"
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +53,9 @@ class PositionUpdater:
         self.config = config
         self.send_update = send_update
 
-        self.pos = 3100, 2600
-        self.heading = 0
+        self.position = RelativePosition(
+            3100, 2600, 0, certainty=0, frame="Map8192x8192"
+        )
         self.updates_since_last_fix = 0
         self.init = False
         self._map_feature_cache = {}
@@ -76,33 +81,60 @@ class PositionUpdater:
             self.update()
 
     def update(self):
-        img = get_image(size=(1920, 1080))  # TODO: no hardcoded size
+        img = get_image()
 
         if not img:
             return
 
-        if self.config["debug_images"]:
+        self.updates_since_last_fix += 1
+
+        if self.config["debug"]["save_images"]:
             self._debug_format = dict(
                 time=time.time(),
                 datetime=datetime.datetime.now(),
             )
 
-        u = self.parse_image(img)
-        if u:
-            self.updates_since_last_fix = 0
-            x, y, alpha = u
-            self.pos = x, y
-            self.heading = alpha
-            u = Update(x, y, alpha, "PLAYER")
-            self.send_update(u)
-        else:
-            self.updates_since_last_fix += 0
+        position = self.parse_image(img)
+
+        if not position:
+            return
+
+        if not self.validate_update(position):
+            return
+
+        self.updates_since_last_fix = 0
+
+        dist = math.dist(self.position[:2], position[:2])
+
+        logger.info(
+            "Position moved %f: %r",
+            dist,
+            position,
+        )
+        u = Update(position, "PLAYER")
+
+        self.send_update(u)
+        self.position = position
+
+    def validate_update(self, pos):
+        if pos.certainty >= 1:
+            return True
+        dist = math.dist(self.position[:2], pos[:2])
+
+        if dist > 500 * pos.certainty:  # no hardcoded Values
+            logger.info(
+                "Discarded moved %f %r",
+                dist,
+                pos,
+            )
+            return False
+        return True
 
     def debug_img(self, function):
-        if not self.config["debug_images"]:
+        if not self.config["debug"]["save_images"]:
             return
         name = function.__name__
-        path = self.config["debug_images"].get(name)
+        path = self.config["debug"]["save_images"].get(name)
         if not path:
             return
         img = function()
@@ -117,25 +149,23 @@ class PositionUpdater:
         def screenshot():
             return img
 
-        update = self.parse_minimap(img)
-        if update:
-            return update
+        position = self.parse_minimap(img)
 
-        update = self.parse_map(img)
-        if update:
-            return update
+        if position is NOT_A_MINIMAP:
+            position = self.parse_map(img)
 
-        return None
+        return position
 
     def parse_map(self, img):
         relPos = s2.parse_map.parse_map(img)
         if relPos:
             a = relPos.absolute()
             r2 = a.relative("map8192x8192")
-            return r2.x, r2.y, r2.heading
+            logger.debug("Using Position from Map: %r", r2)
+            return r2
 
     def map_features(self):
-        x, y = self.pos
+        x, y = self.position.round()
 
         # TODO: add based on speed and heading ?
         groups = 64  # cach features for 64 by 64 pixel blocks.
@@ -166,7 +196,7 @@ class PositionUpdater:
 
         a = self.get_minimap_arrow(minimap)
         if a is None:
-            return False
+            return NOT_A_MINIMAP
 
         # outer_mask = circle_mask(shape)
         # inner_mask = circle_mask(shape, radius=15)
@@ -192,7 +222,7 @@ class PositionUpdater:
             @self.debug_img
             def minimap_with_too_few_matches():
                 box = self.map_edges[offset_slices].copy()
-                op = tuple(self.pos - offset)
+                op = tuple(numpy.array(self.position[:2]) - offset)
                 cv2.circle(box, op, 5, (0x00, 0x00, 0xFF), 1)
                 return cv2.drawMatches(
                     minimap.rgb,
@@ -234,9 +264,6 @@ class PositionUpdater:
         pos = position_in_box + offset
         pos = numpy.int32(pos)
 
-        delta = pos - self.pos
-        dist = numpy.linalg.norm(delta)
-
         heading = -math.atan2(M[0, 1], M[0, 0])
 
         @self.debug_img
@@ -251,7 +278,7 @@ class PositionUpdater:
 
             arrow = int(arrow[0]), int(arrow[1])
             bc = tuple(numpy.uint32(position_in_box))
-            op = tuple(numpy.array(self.pos) - offset)
+            op = tuple(numpy.array(self.position[:2]) - offset)
 
             box = self.map_edges[offset_slices].copy()
 
@@ -268,24 +295,16 @@ class PositionUpdater:
                 flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
             )
 
-        # calculate expected position based on speed, heading and last fix
-
-        if dist > 300:
-            logger.info(
-                "Discarded %s %d°  moved %f",
-                pos,
-                heading * 180 / math.pi % 360,
-                dist,
-            )
-            return False
-
-        logger.info(
-            "Position update %s %d°  moved %f",
-            pos,
-            heading * 180 / math.pi % 360,
-            dist,
+        logger.debug(
+            "Position based on Minimap: %.1f %.1f %.1f°", *pos, math.degrees(heading)
         )
-        return *pos, heading
+        pos = RelativePosition(
+            *pos,
+            heading,
+            certainty=0.5,
+            frame="map8192x8192",
+        )
+        return pos
 
     def get_translation(self, img, src_pts, dst_pts):
         M, mask = cv2.findHomography(
@@ -323,6 +342,7 @@ class PositionUpdater:
                     logger.debug("Found Arrow in Minimap %r", poly)
                     return poly
         else:
+            logger.debug("Not a Minimap")
             return None
 
 

@@ -14,7 +14,7 @@ def get_arg_parser():
         "--config", "-c", action="append", help="Config files .toml", default=()
     )
     parser.add_argument(
-        "tests", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
+        "test_images", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
     )
 
     return parser
@@ -44,6 +44,11 @@ def main():
 
     config = load_configs(options.config)
     logging.config.dictConfig(config["logging"])
+
+    if options.test_images:
+        from .config import _the_config  # HACK ALERT
+
+        _the_config["debug"]["images"] = options.test_images
 
     if config["debug"]["log_args"]:
         logger.debug("Arguments: \n%s", pprint.pformat(options))
