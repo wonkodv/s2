@@ -92,7 +92,6 @@ def parse_map(img):
     hsv = cv2.cvtColor(rgb, cv2.COLOR_BGR2HSV)  # TODO: is img.rgb really BGR?
     mask = cv2.inRange(hsv, (100, 255, 150), (100, 255, 240))
     polygons = polygons_in_mask(mask)
-    logger.debug("Found %d polygons", len(polygons))
 
     arrow = (get_arrow(p) for p in polygons)
     arrow = [a for a in arrow if a]
@@ -100,7 +99,7 @@ def parse_map(img):
         if len(arrow) > 1:
             logger.warning("More than 1 Arrow: %r", arrow)
         else:
-            logger.debug("No Arrows")
+            logger.debug("Not a Map or Arrow not visible")
         return None
 
     (y, x), angle = arrow[0]
@@ -108,7 +107,13 @@ def parse_map(img):
     height, width = rgb.shape[:2]
     frame_of_reference = f"crop{width}x{height}"
 
-    return RelativePosition(x=x, y=y, heading=angle, frame=frame_of_reference)
+    return RelativePosition(
+        x=x,
+        y=y,
+        heading=angle,
+        certainty=1,
+        frame=frame_of_reference,
+    )
 
 
 def test(image="test/s2/map_with_arrow.png"):

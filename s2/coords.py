@@ -17,6 +17,7 @@ class AbsolutePosition(typing.NamedTuple):
     x: float
     y: float
     heading: float
+    certainty: float
 
     def relative(self, frame) -> "RelativePosition":
         """Absolute Position.
@@ -34,7 +35,7 @@ class AbsolutePosition(typing.NamedTuple):
         x = self.x * scale_x + ref1_x
         y = self.y * scale_y + ref1_y
 
-        return RelativePosition(x, y, self.heading, frame)
+        return RelativePosition(x, y, self.heading, self.certainty, frame)
 
 
 class RelativePosition(typing.NamedTuple):
@@ -47,6 +48,7 @@ class RelativePosition(typing.NamedTuple):
     x: float
     y: float
     heading: float
+    certainty: float
     frame: tuple
 
     def absolute(self) -> AbsolutePosition:
@@ -59,7 +61,7 @@ class RelativePosition(typing.NamedTuple):
 
         x = (self.x - ref1_x) / scale_x
         y = (self.y - ref1_y) / scale_y
-        return AbsolutePosition(x, y, self.heading)
+        return AbsolutePosition(x, y, self.heading, self.certainty)
 
     def round(self):
         return int(self.x), int(self.y)
