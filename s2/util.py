@@ -2,7 +2,6 @@ import collections
 import collections.abc
 import logging
 import sys
-import time
 from functools import cached_property
 
 import cv2
@@ -10,9 +9,6 @@ import numpy
 import PIL.Image
 import PIL.ImageGrab
 import PIL.ImageTk
-
-if sys.platform == "win32":
-    from .hwnd import Window
 
 if sys.version_info < (3, 9):
     from functools import lru_cache as cache  # TODO: move to python 3.9?
@@ -44,6 +40,14 @@ class IMG:
     def from_path(cls, p):
         return cls(image=PIL.Image.open(p))
 
+    @classmethod
+    def from_rgb(cls, rgb):
+        return cls(rgb=rgb)
+
+    @classmethod
+    def from_image(cls, image):
+        return cls(image=image)
+
     @property
     def image(self):
         if self._image is None:
@@ -71,34 +75,6 @@ class IMG:
     @cached_property
     def photoimage(self):
         return PIL.ImageTk.PhotoImage(self.image)
-
-
-def get_image(title=None, size=None):
-    """Screenshot current ForeGroundWin if it matches."""
-
-    func_logger = logger.getChild("get_image")
-    t = time.perf_counter()
-    wnd = Window.get_foreground_window()
-
-    if not wnd:
-        func_logger.info("Not real window %r", wnd)
-        return None
-
-    if title and wnd.text != title:
-        func_logger.info("Title MisMatch %s %r", title, wnd)
-        return None
-
-    *r, w, h = wnd.rect
-
-    if size and size != (w, h):
-        func_logger.info("Size Mismatch %s, %r", r, wnd)
-        return None
-
-    img = PIL.ImageGrab.grab(r, all_screens=True)
-    img = IMG(image=img)
-    t = time.perf_counter() - t
-    func_logger.debug("Screen Grab took %.6f seconds, %r", t, wnd)
-    return img
 
 
 def merge_recursive_dict(old, new):
