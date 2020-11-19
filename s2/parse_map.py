@@ -28,12 +28,13 @@ def polygons_in_mask(mask):
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_NONE,
     )
-    polys = [cv2.approxPolyDP(c, 2, True) for c in contours]
+    polys = [cv2.approxPolyDP(c, 4, True) for c in contours]
     return polys
 
 
 def get_arrow(poly):
     if len(poly) != 4:
+        logger.debug("Not 4 points: %r", poly)
         return None
 
     poly = poly.reshape(4, 2)
@@ -51,12 +52,14 @@ def get_arrow(poly):
 
     logger.debug("Lines: %r", lines)
 
-    if long1_length < 19 or long2_length < 19:
-        logger.warning("long lines too short", lines)
-        return None
+    certainty = 1.0
+
+    if long1_length < 15 or long2_length < 15:
+        logger.warning("long lines too short %r", lines)
+        certainty *= 0.9
     if long1_length > 23 or long2_length > 23:
-        logger.warning("long lines too long", lines)
-        return None
+        logger.warning("long lines too long %r", lines)
+        certainty *= 0.9
 
     if long1_start == long2_end:
         stem = poly[long1_start]
@@ -66,12 +69,12 @@ def get_arrow(poly):
         logger.warning("Arrow long Lines are not connected start to end %r", lines)
         return None
 
-    if short1_length < 9 or short2_length < 9:
+    if short1_length < 7 or short2_length < 7:
         logger.warning("Short lines too short", lines)
-        return None
-    if short1_length > 13 or short2_length > 13:
+        certainty *= 0.9
+    if short1_length > 14 or short2_length > 14:
         logger.warning("Short lines too long", lines)
-        return None
+        certainty *= 0.9
 
     if short1_start == short2_end:
         stern = poly[short1_start]
@@ -81,10 +84,10 @@ def get_arrow(poly):
         logger.warning("Arrow short Lines are not connected start to end %r", lines)
         return None
 
-    direction = stem - stern
-    angle = math.atan2(*direction)
+    dx, dy = stem - stern
+    angle = math.atan2(dx, -dy)
 
-    return stern, angle
+    return stern, angle, certainty
 
 
 def parse_map(img):
@@ -93,6 +96,8 @@ def parse_map(img):
     mask = cv2.inRange(hsv, (100, 255, 150), (100, 255, 240))
     polygons = polygons_in_mask(mask)
 
+    if not polygons:
+        logger.debug("No polygons found")
     arrow = (get_arrow(p) for p in polygons)
     arrow = [a for a in arrow if a]
     if len(arrow) != 1:
@@ -102,7 +107,7 @@ def parse_map(img):
             logger.debug("Not a Map or Arrow not visible")
         return None
 
-    (y, x), angle = arrow[0]
+    (x, y), angle, certainty = arrow[0]
 
     height, width = rgb.shape[:2]
     frame_of_reference = f"crop{width}x{height}"
@@ -111,7 +116,7 @@ def parse_map(img):
         x=x,
         y=y,
         heading=angle,
-        certainty=1,
+        certainty=certainty,
         frame=frame_of_reference,
     )
 
