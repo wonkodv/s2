@@ -4,6 +4,7 @@ import datetime
 import functools
 import logging
 import math
+import pathlib
 import time
 
 import cv2
@@ -45,6 +46,20 @@ def circle_mask(shape, center=None, radius=None):
     return mask
 
 
+def load_map_edges(map_name):
+    p = pathlib.Path.cwd() / f"{map_name}.edges.png"
+    try:
+        img = PIL.Image.open(p)
+        return numpy.array(img)
+    except FileNotFoundError:
+        pass
+    img = IMG.from_path(p.parent / f"{map_name}.png")
+    e = img.edges
+    edges_img = PIL.Image.fromarray(e)
+    edges_img.save(p)
+    return e
+
+
 class PositionUpdater:
     last_minimap = None
     _debug_path = None
@@ -56,7 +71,7 @@ class PositionUpdater:
 
         self.map_name = get_config("source", "minimap", "map")
         self.position = RelativePosition(
-            3100, 2600, 0, certainty=0, frame="Map8192x8192"
+            3100, 2600, 0, certainty=0, frame=self.map_name
         )
         self.updates_since_last_fix = 0
         self.init = False
@@ -69,7 +84,7 @@ class PositionUpdater:
         if self.init:
             return
         self.init = True
-        self.map_edges = numpy.array(PIL.Image.open("map_edges.png"))
+        self.map_edges = load_map_edges(self.map_name)
 
         self.akaze = cv2.AKAZE_create()
         self.dm = cv2.DescriptorMatcher_create(cv2.DescriptorMatcher_BRUTEFORCE_HAMMING)
