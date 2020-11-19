@@ -10,9 +10,7 @@ logger = logging.getLogger(__name__)
 
 def get_arg_parser():
     parser = argparse.ArgumentParser(prog=__package__)
-    parser.add_argument(
-        "--config", "-c", action="append", help="Config files .toml", default=()
-    )
+    parser.add_argument("--config", "-c", action="append", help="Config files .toml")
     parser.add_argument(
         "test_images", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
     )
@@ -23,7 +21,7 @@ def get_arg_parser():
 def run(config):
     from . import gui, position_updater
 
-    g, send_update = gui.create(config)
+    g, send_update = gui.create()
 
     pu = position_updater.create(config, send_update)
     put = threading.Thread(target=pu.run, daemon=True)

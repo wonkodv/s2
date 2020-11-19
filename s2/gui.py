@@ -1,17 +1,18 @@
+import logging
 import math
 import queue
+import sys
 import tkinter
+
+from s2.config import get_config
 
 from .util import IMG
 
-COLORS = {
-    "PLAYER": "orange",
-}
+logger = logging.getLogger(__name__)
 
 
 class GUI:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self):
         self.root = tkinter.Tk()
         self.root.title("Second Screen ")
         self.root.bind("<Configure>", self.resize)
@@ -29,13 +30,20 @@ class GUI:
         # c.bind('<ButtonPress-1>', lambda event: c.scan_mark(event.x, event.y))
         # c.bind("<B1-Motion>", lambda event: c.scan_dragto(event.x, event.y, gain=1))
 
-        self.map_image = IMG.from_path("map.png")
+        self.map_name = get_config("gui", "map")
+        self.map_image = IMG.from_path(f"{self.map_name}.png")
 
         self.map_widget = c.create_image(
-            -2200, -2000, anchor="nw", image=self.map_image.photoimage
+            -0, -0, anchor="nw", image=self.map_image.photoimage
         )
         self.player_widget = c.create_line(
-            100, 100, 150, 150, arrow=tkinter.LAST, fill=COLORS["PLAYER"], width=5
+            100,
+            100,
+            150,
+            150,
+            arrow=tkinter.LAST,
+            fill=get_config("gui", "colors", "player"),
+            width=10,
         )
 
         self.q = queue.Queue()
@@ -80,6 +88,15 @@ class GUI:
         self.q.put(u)
 
 
-def create(config):
-    g = GUI(config)
+def _handle_exception(tk, typ, val, tb):
+    logger.exception("Exception in TK", exc_info=val)
+    if typ is KeyboardInterrupt:
+        sys.exit()
+
+
+tkinter.Tk.report_callback_exception = _handle_exception
+
+
+def create():
+    g = GUI()
     return g, g.send_update

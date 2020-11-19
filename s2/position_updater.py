@@ -12,6 +12,7 @@ import numpy.linalg
 import PIL.Image
 
 import s2.parse_map
+from s2.config import get_config
 from s2.coords import RelativePosition
 from s2.get_image import get_image
 from s2.util import IMG, Update
@@ -53,6 +54,7 @@ class PositionUpdater:
         self.config = config
         self.send_update = send_update
 
+        self.map_name = get_config("source", "minimap", "map")
         self.position = RelativePosition(
             3100, 2600, 0, certainty=0, frame="Map8192x8192"
         )
@@ -157,19 +159,18 @@ class PositionUpdater:
         return position
 
     def parse_map(self, img):
-        relPos = s2.parse_map.parse_map(img)
-        if relPos:
-            a = relPos.absolute()
-            r2 = a.relative("map8192x8192")
-            logger.debug("Using Position from Map: %r", r2)
-            return r2
+        pos = s2.parse_map.parse_map(img)
+        if pos:
+            pos = pos.relative(self.map_name)
+            logger.debug("Using Position from Map: %r", pos)
+            return pos
 
     def map_features(self):
         x, y = self.position.round()
 
         # TODO: add based on speed and heading ?
-        groups = 64  # cach features for 64 by 64 pixel blocks.
-        box_size = 512
+        groups = get_config("source", "minimap", "groups")
+        box_size = get_config("source", "minimap", "box_size")
 
         x |= groups - 1
         y |= groups - 1
@@ -302,7 +303,7 @@ class PositionUpdater:
             *pos,
             heading,
             certainty=0.5,
-            frame="map8192x8192",
+            frame=self.map_name,
         )
         return pos
 

@@ -8,9 +8,22 @@ from .util import merge_recursive_dict
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
+    "gui": {
+        "map": "map4096x4096",
+        "colors": {
+            "player": "orange",
+        },
+    },
     "get_image": {
         "title": "GTAIV",
         "size": (1920, 1080),
+    },
+    "source": {
+        "minimap": {
+            "map": "map4096x4096",  # The map to find minimap images in
+            "groups": 32,  # round player coordinates to this power of 2 when finding map features
+            "box_size": 256,  # size in pixel to find features in
+        },
     },
     "debug": {
         "save_images": {"screenshot": False},
@@ -23,7 +36,7 @@ DEFAULT_CONFIG = {
         "disable_existing_loggers": True,
         "formatters": {
             "long": {
-                "format": "%(filename)s:%(lineno)d:%(levelname)s:%(name)s: %(message)s",
+                "format": "%(levelname)s %(asctime)s %(filename)s:%(lineno)d %(name)s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "short": {
@@ -48,7 +61,6 @@ DEFAULT_CONFIG = {
         "root": {"handlers": ["console", "file"], "level": "WARNING"},
         "loggers": {
             "s2": {"level": "DEBUG"},
-            "s2.util.get_image": {"level": "WARNING"},
         },
     },
 }
@@ -61,12 +73,13 @@ def load_configs(files):
 
     global _the_config
 
-    for file_name in files:
-        if isinstance(file_name, str) and "=" in file_name:
-            file_name = io.StringIO(file_name)
-        d = toml.load(file_name)
-        config = merge_recursive_dict(config, d)
-    _the_config = config
+    if files:
+        for file_name in files:
+            if isinstance(file_name, str) and "=" in file_name:
+                file_name = io.StringIO(file_name)
+            d = toml.load(file_name)
+            config = merge_recursive_dict(config, d)
+        _the_config = config
     return config  # TODO: do not return Value, use `get_config`
 
 

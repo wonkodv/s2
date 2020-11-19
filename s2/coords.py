@@ -4,10 +4,12 @@ The Reference Points are the most NorthWestern grey pixel in the parking Lot
 and  the most SouthEastern one on the pier.
 """
 
+import math
 import typing
 
 REF_POINTS = {
     "map8192x8192": ((1793, 1991), (5809, 6223)),
+    "map4096x4096": ((896, 995), (2904, 3111)),
     "map2048x2048": ((448, 498), (1451, 1555)),
     "crop1015x680": ((196, 70), (717, 618)),
 }
