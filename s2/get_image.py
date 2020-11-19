@@ -37,6 +37,9 @@ def _get_debug_image(area):
     return IMG.from_image(i)
 
 
+_last_wnd = None
+
+
 def get_image(area=None):
     """Screenshot current ForeGroundWin if it matches."""
 
@@ -48,19 +51,26 @@ def get_image(area=None):
     size = get_config("get_image", "size")
 
     wnd = Window.get_foreground_window()
+    global _last_wnd
 
     if not wnd:
-        logger.info("Not real window %r", wnd)
+        if _last_wnd != wnd:
+            _last_wnd = wnd
+            logger.info("Not real window %r", wnd)
         return None
 
     if title and wnd.text != title:
-        logger.info("Title MisMatch %s %r", title, wnd)
+        if _last_wnd != wnd:
+            _last_wnd = wnd
+            logger.info("Title MisMatch %s %r", title, wnd)
         return None
 
     *r, w, h = wnd.rect
 
     if size and size != (w, h):
-        logger.info("Size Mismatch %s, %r", r, wnd)
+        if _last_wnd != wnd:
+            _last_wnd = wnd
+            logger.info("Size Mismatch %s, %r", r, wnd)
         return None
 
     if area:
