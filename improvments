@@ -1,3 +1,29 @@
+Usabillity:
+*   Draw Points of interest on Map
+*   Add Hotkeys to:
+    *   Make Screenshot and make a POI from it
+    *   Mark current position on Map
+*   configure which POIs to load
+*   Manage POIs in the GUI
+*   Grab Icons from Map and make temporary POIs
+
+pois.toml
+
+    [[POIs]]
+    icon = "icons/food.png"
+    location = [0.1313123, 0.12313]
+
+    [[POIs]]
+    icon = "icons/hideout.png"
+    location = [ ...]
+
+    [[POIs]]
+    icon = "icons/screenshot.png"
+    location = [ ... ]
+    screenshot = "screenshots/DATETIME.png"
+    description = "enter description here"
+
+
 Precision
     Project search Box based on heading and speed
     When matching Keypoints, calculate Center, and match again against keypoints in that area
@@ -7,11 +33,10 @@ Error Recovery
     add confidence to point
     ignore outliers
 
-Performance
-    Get Screenshot only from Minimap Area. if black, get position from Map
-    Put Debug Objects in a Queue and handle asynchronously.
 
-    Pipeline with adjusting speed of computation:
+
+Performance
+    Pipeline:
           > A   Get screenshot
         A > B   analyze screenshot
           > C   analyze map
