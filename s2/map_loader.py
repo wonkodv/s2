@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python -u
 """ Download the gta map."""
 
 import concurrent.futures
@@ -54,11 +54,13 @@ def main(scale="2"):
             tile_coords,
         )
         for (x, y), tile in tiles:
+            print(f"stitching {x}-{y}")
             x = x * TILE_RESOLUTION
             y = y * TILE_RESOLUTION
             img[y : y + TILE_RESOLUTION, x : x + TILE_RESOLUTION] = tile
 
-    PIL.Image.fromarray(img).save(f"map{scale.resolution}.png")
+    print(f"saving {x}-{y}")
+    PIL.Image.fromarray(img).save(f"map{scale.resolution}x{scale.resolution}.png")
 
 
 if __name__ == "__main__":
