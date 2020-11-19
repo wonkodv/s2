@@ -67,14 +67,16 @@ class GUI:
     def update(self, u):
         assert u.id == "PLAYER"
 
-        player_x = u.position.x
-        player_y = u.position.y
+        pos = u.position.relative(self.map_name)
+
+        player_x = pos.x
+        player_y = pos.y
 
         center_x = self.frame.winfo_width() // 2
         center_y = self.frame.winfo_height() // 2
 
-        arrow_x = center_x + 20 * math.sin(u.position.heading)
-        arrow_y = center_y - 20 * math.cos(u.position.heading)
+        arrow_x = center_x + 50 * math.sin(pos.heading)
+        arrow_y = center_y - 50 * math.cos(pos.heading)
 
         self.canvas.coords(self.player_widget, (center_x, center_y, arrow_x, arrow_y))
 

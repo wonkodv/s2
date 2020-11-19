@@ -121,6 +121,7 @@ class PositionUpdater:
     def validate_update(self, pos):
         if pos.certainty >= 1:
             return True
+        # TODO: frame of reeference
         dist = math.dist(self.position[:2], pos[:2])
 
         if dist > 500 * pos.certainty:  # no hardcoded Values

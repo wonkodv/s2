@@ -22,10 +22,9 @@ class AbsolutePosition(typing.NamedTuple):
     certainty: float
 
     def relative(self, frame) -> "RelativePosition":
-        """Absolute Position.
+        """Relative Position.
 
-        Given as offset to Reference Point 1 as fraction of the distance between reference points
-        1 and 2.
+        Pixel in the given `frame` of reference
         """
         ref_points = REF_POINTS[frame]
 
@@ -38,6 +37,9 @@ class AbsolutePosition(typing.NamedTuple):
         y = self.y * scale_y + ref1_y
 
         return RelativePosition(x, y, self.heading, self.certainty, frame)
+
+    def absolute(self) -> "AbsolutePosition":
+        return self
 
 
 class RelativePosition(typing.NamedTuple):
@@ -67,3 +69,12 @@ class RelativePosition(typing.NamedTuple):
 
     def round(self):
         return int(self.x), int(self.y)
+
+    def relative(self, frame) -> "RelativePosition":
+        if frame == self.frame:
+            return self
+        return self.absolute().relative(frame)
+
+    def __repr__(self):
+        heading = math.degrees(self.heading)
+        return f"{self.__class__.__name__}({self.x:.0f}, {self.y:.0f}, {heading:.0f}°, {self.frame})"
