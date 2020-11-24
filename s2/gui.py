@@ -1,14 +1,31 @@
+import functools
 import logging
 import math
 import queue
 import sys
 import tkinter
 
+import PIL.Image
+import PIL.ImageTk
+
 from s2.config import get_config
+from s2.pois import load_pois
 
 from .util import IMG
 
 logger = logging.getLogger(__name__)
+
+
+@functools.cache
+def load_icon(ico):
+    """Load icon with name.
+
+    By caching, the same image is not loaded twice AND a reference to the
+    photo image is kept which is importnt because Canvas.create_image does not
+    and will not show the image, without an error if the reference to the
+    PhotoImage goes stale.
+    """
+    return PIL.ImageTk.PhotoImage(PIL.Image.open(f"icons/{ico}.png"))
 
 
 class GUI:
@@ -36,6 +53,7 @@ class GUI:
         self.map_widget = c.create_image(
             -0, -0, anchor="nw", image=self.map_image.photoimage
         )
+
         self.player_widget = c.create_line(
             100,
             100,
@@ -45,6 +63,12 @@ class GUI:
             fill=get_config("gui", "colors", "player"),
             width=10,
         )
+
+        self.pois = []
+        for poi in load_pois():
+            rel = poi.position.relative(self.map_name)
+            wdg = c.create_image(rel.x, rel.y, anchor="nw", image=load_icon(poi.icon))
+            self.pois.append((poi, wdg))
 
         self.q = queue.Queue()
         self.root.after(100, self._process_q)
@@ -69,8 +93,7 @@ class GUI:
 
         pos = u.position.relative(self.map_name)
 
-        player_x = pos.x
-        player_y = pos.y
+        player_x, player_y = pos.round()
 
         center_x = self.frame.winfo_width() // 2
         center_y = self.frame.winfo_height() // 2
@@ -84,6 +107,14 @@ class GUI:
         map_y = center_y - player_y
 
         self.canvas.coords(self.map_widget, (map_x, map_y))
+
+        # breakpoint()
+        for poi, wdg in self.pois:
+            x, y = poi.position.relative(self.map_name).round()
+            draw_x, draw_y = x + map_x, y + map_y
+            logger.debug("POI at pixel %d/%d, rel %d/%d: %r", draw_x, draw_y, x, y, poi)
+            self.canvas.coords(wdg, (draw_x, draw_y))
+
         self.canvas.pack()
 
     def send_update(self, u):

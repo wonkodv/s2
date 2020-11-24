@@ -116,7 +116,6 @@ def parse_map(img):
         x=x,
         y=y,
         heading=angle,
-        certainty=certainty,
         frame=frame_of_reference,
     )
 

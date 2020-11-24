@@ -9,10 +9,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
     "gui": {
-        "map": "map4096x4096",
+        "map": "map2048x2048",
         "colors": {
             "player": "orange",
         },
+        "poi_files": [
+            "pois.toml",
+        ],
     },
     "get_image": {
         "title": "GTAIV",
@@ -26,7 +29,10 @@ DEFAULT_CONFIG = {
         },
     },
     "debug": {
-        "save_images": {"screenshot": False},
+        "save_images": {
+            "screenshot": False,
+            "minimap_with_matches": "dump/{time}.png",
+        },
         "log_config": False,
         "log_args": False,
         "images": [],  # paths to use instead of screenshots for testing

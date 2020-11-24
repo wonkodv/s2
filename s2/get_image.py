@@ -19,7 +19,10 @@ _debug_image_counter = 0
 
 def _get_debug_image(area):
     global _debug_image_counter
-    p = get_config("debug", "images")[_debug_image_counter]
+    try:
+        p = get_config("debug", "images")[_debug_image_counter]
+    except IndexError:
+        sys.exit()  # stops current thread
 
     logger.debug(
         "using Debug image %d: %s",
