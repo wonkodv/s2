@@ -70,9 +70,7 @@ class PositionUpdater:
         self.send_update = send_update
 
         self.map_name = get_config("source", "minimap", "map")
-        self.position = RelativePosition(
-            3100, 2600, 0, certainty=0, frame=self.map_name
-        )
+        self.position = RelativePosition(3100, 2600, 0, frame=self.map_name)
         self.updates_since_last_fix = 0
         self.init = False
         self._map_feature_cache = {}
@@ -116,7 +114,9 @@ class PositionUpdater:
         if not position:
             return
 
-        if not self.validate_update(position):
+        position, certainty = position
+
+        if not self.validate_update(position, certainty):
             return
 
         self.updates_since_last_fix = 0
@@ -133,13 +133,13 @@ class PositionUpdater:
         self.send_update(u)
         self.position = position
 
-    def validate_update(self, pos):
-        if pos.certainty >= 1:
+    def validate_update(self, pos, cert):
+        if cert >= 1:
             return True
         # TODO: frame of reeference
         dist = math.dist(self.position[:2], pos[:2])
 
-        if dist > 500 * pos.certainty:  # no hardcoded Values
+        if dist > 200 * cert:  # no hardcoded Values
             logger.info(
                 "Discarded moved %f %r",
                 dist,
@@ -179,7 +179,7 @@ class PositionUpdater:
         if pos:
             pos = pos.relative(self.map_name)
             logger.debug("Using Position from Map: %r", pos)
-            return pos
+            return pos, 1.0
 
     def map_features(self):
         x, y = self.position.round()
@@ -295,7 +295,7 @@ class PositionUpdater:
 
             arrow = int(arrow[0]), int(arrow[1])
             bc = tuple(numpy.uint32(position_in_box))
-            op = tuple(numpy.array(self.position[:2]) - offset)
+            op = tuple(numpy.uint32(self.position[:2]) - offset)
 
             box = self.map_edges[offset_slices].copy()
 
@@ -309,7 +309,7 @@ class PositionUpdater:
                 map_keypoints,
                 good,
                 None,
-                flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+                # flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
             )
 
         logger.debug(
@@ -318,10 +318,9 @@ class PositionUpdater:
         pos = RelativePosition(
             *pos,
             heading,
-            certainty=0.5,
             frame=self.map_name,
         )
-        return pos
+        return pos, 0.5
 
     def get_translation(self, img, src_pts, dst_pts):
         M, mask = cv2.findHomography(
