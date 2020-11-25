@@ -15,39 +15,47 @@ pois = json.loads(s)
 
 POIs = []
 
-for category in pois:
-    for p in pois[category]:
+for group in pois:
+    for p in pois[group]:
         poi = dict()
         POIs.append(poi)
-        poi["icon"] = category
+        icon = group
+
         x = float(p["lng"])
         y = float(p["lat"])
+
         poi["position"] = f"gta4.net:{x}:{y}"
 
-        if category == "pigeon":
+        if group == "pigeon":
             poi["link"] = p["img"].replace("\\", "")
 
-        if category == "weapon":
+        if group == "weapon":
             # poi['icon'] = re.sub(r'Weapon \((.*)\)',"\\1",p['label']   )
             poi["description"] = re.sub("<[^>]*>", "\n", p["text"]).strip()
 
-        if category == "stunt":
+        if group == "stunt":
             poi["link"] = p["vid"].replace("\\", "")
 
-        if category == "platform":
+        if group == "platform":
             poi["link"] = p["img"].replace("\\", "")
 
-        if category == "theft":
+        if group == "theft":
+            group = "side-mission"
             poi["description"] = re.sub(
-                r"<h2>(.*)</h2>.*<strong>(.*)</strong>\.</p>", "\\1\n\\2", p["text"]
+                r"<h2>(.*)</h2>.*<strong>(.*)</strong>\.</p>",
+                "\\1\n\\2",
+                p["text"],
             )
 
-        if category == "character":
+        if group == "character":
+            group = "side-mission"
             poi["description"] = re.sub("<[^>]*>", "\n", p["text"]).strip()
             poi["link"] = p["img"]
 
-        if category == "activities":
+        if group == "activities":
             poi["icon"] = p["icon"]
+
+        poi["group"] = group
 
 with open("pois.toml", "wt") as f:
     toml.dump(dict(POIs=POIs), f)

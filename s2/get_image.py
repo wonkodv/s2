@@ -43,7 +43,7 @@ def _get_debug_image(area):
 _last_wnd = None
 
 
-def get_image(area=None):
+def get_image(area=None) -> IMG:
     """Screenshot current ForeGroundWin if it matches."""
 
     debug_images = get_config("debug", "images")
