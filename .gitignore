@@ -1,6 +1,6 @@
 .*
 !.gitignore
-
+screenshots.toml
 venv
 log
 *.bmp
