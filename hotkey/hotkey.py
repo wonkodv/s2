@@ -12,6 +12,8 @@ __all__ = (
     "HotKey",
     "EventHotKey",
     "HotKeyError",
+    "start",
+    "stop",
 )
 
 _Lock = threading.Lock()
@@ -169,15 +171,7 @@ class EventHotKey(HotKey):
         self.evt.set()  # Should not be needed, but otherwise deadlocks show up :-/
 
 
-def start():
-    logger.info("Starting")
-    impl.start()
-    threading.Thread(target=loop, daemon=True).start()
-    while not _Started:
-        time.sleep(0)
-
-
-def loop():
+def _loop():
     global _Started
     impl.prepare()
     _Started = True
@@ -185,6 +179,14 @@ def loop():
     impl.loop()
     logger.info("Hotkey Processing Stopped")
     _Started = False
+
+
+def start():
+    logger.info("Starting")
+    impl.start()
+    threading.Thread(target=_loop, daemon=True, name="Hotkey").start()
+    while not _Started:
+        time.sleep(0)
 
 
 def stop():

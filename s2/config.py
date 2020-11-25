@@ -15,7 +15,27 @@ DEFAULT_CONFIG = {
         },
         "poi_files": [
             "pois.toml",
+            "screenshots.toml",
         ],
+        "enabled_groups": {
+            "activities": False,
+            "armour": True,
+            "health": True,
+            "pigeon": False,
+            "platform": True,
+            "side-mission": False,
+            "stunt": True,
+            "weapon": True,
+            "screenshot": True,
+        },
+        "screenshot": {
+            "hotkey": "F11",
+            "image": "screenshots/{datetime:%Y-%m-%d-%H-%m-%S-%f}.png",
+            "description": "Screenshot {datetime:%Y-%m-%d %H:%M:%S.%f}",
+            "group": "screenshot",
+            "icon": "screenshot",
+            "poi_file": "screenshots.toml",
+        },
     },
     "get_image": {
         "title": "GTAIV",

@@ -1,17 +1,27 @@
 import functools
 import logging
 import math
-import queue
 import sys
 import tkinter
-
+import toml
+import datetime
+import time
 import PIL.Image
 import PIL.ImageTk
+import pathlib
 
 from s2.config import get_config
-from s2.pois import load_pois
+from s2.pois import load_pois, PointOfInterest
+from s2.get_image import get_image
 
 from .util import IMG
+
+try:
+    import hotkey
+except ImportError:
+    pass
+else:
+    hotkey.start()
 
 logger = logging.getLogger(__name__)
 
@@ -66,23 +76,34 @@ class GUI:
 
         self.pois = []
         for poi in load_pois():
-            rel = poi.position.relative(self.map_name)
-            wdg = c.create_image(rel.x, rel.y, anchor="nw", image=load_icon(poi.icon))
-            self.pois.append((poi, wdg))
+            self.add_poi(poi)
 
-        self.q = queue.Queue()
-        self.root.after(100, self._process_q)
+        self.hotkeys = []
+        hk = get_config("gui", "screenshot", "hotkey")
+        if hk:
+            self.hotkeys.append(
+                hotkey.HotKey(
+                    hk,
+                    self.root.after,
+                    1,
+                    self.create_poi_screenshot,
+                )
+            )
+        for hk in self.hotkeys:
+            hk.register()
+
+    def add_poi(self, poi):
+        rel = poi.position.relative(self.map_name)
+        wdg = self.canvas.create_image(
+            rel.x,
+            rel.y,
+            anchor="nw",
+            image=load_icon(poi.icon),
+        )
+        self.pois.append((poi, wdg))
 
     def run(self):
         self.root.mainloop()
-
-    def _process_q(self):
-        try:
-            while True:
-                u = self.q.get_nowait()
-                self.update(u)
-        except queue.Empty:
-            self.root.after(100, self._process_q)
 
     def resize(self, evt):
         self.canvas.pack()
@@ -90,6 +111,8 @@ class GUI:
 
     def update(self, u):
         assert u.id == "PLAYER"
+
+        self.most_recent_position = u.position
 
         pos = u.position.relative(self.map_name)
 
@@ -112,13 +135,53 @@ class GUI:
         for poi, wdg in self.pois:
             x, y = poi.position.relative(self.map_name).round()
             draw_x, draw_y = x + map_x, y + map_y
-            logger.debug("POI at pixel %d/%d, rel %d/%d: %r", draw_x, draw_y, x, y, poi)
             self.canvas.coords(wdg, (draw_x, draw_y))
 
         self.canvas.pack()
 
     def send_update(self, u):
-        self.q.put(u)
+        self.root.after(1, self.update, u)
+
+    def create_poi_screenshot(self):
+        lg = logging.getLogger(self.__class__.__qualname__).getChild(".screenshot")
+        img = get_image()
+        if not img:
+            lg.warning("Can not get Image")
+            return
+
+        pos = self.most_recent_position
+        d = datetime.datetime.now()
+        t = time.time()
+
+        fn = get_config("gui", "screenshot", "image")
+        fn = fn.format(pos=pos, time=t, datetime=d)
+        pathlib.Path(fn).parent.mkdir(parents=True, exist_ok=True)
+
+        desc = get_config("gui", "screenshot", "description")
+        desc = desc.format(pos=pos, time=t, datetime=d)
+
+        lg.info("Saving Screenshot %s", fn)
+        img.image.save(fn)
+
+        poi = PointOfInterest(
+            position=pos,
+            group=get_config("gui", "screenshot", "group"),
+            icon=get_config("gui", "screenshot", "icon"),
+            description=desc,
+            link=fn,
+        )
+        self.add_poi(poi)
+
+        t = toml.dumps(dict(POIs=[poi]))
+
+        fn = get_config("gui", "screenshot", "poi_file")
+        pathlib.Path(fn).parent.mkdir(parents=True, exist_ok=True)
+
+        lg.info("Appending poi to file %s %r", fn, poi)
+        s = toml.dumps(dict(POIs=[poi.to_dict()]))
+        with open(fn, "at") as f:
+            f.write("\n\n")
+            f.write(s)
 
 
 def _handle_exception(tk, typ, val, tb):
