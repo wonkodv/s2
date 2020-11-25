@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 def get_arg_parser():
     parser = argparse.ArgumentParser(prog=__package__)
     parser.add_argument("--config", "-c", action="append", help="Config files .toml")
+    parser.add_argument("--dump-config", action="store_true", help="Dump effective configuration to stdout")
     parser.add_argument(
         "test_images", nargs="*", type=pathlib.Path, help="Some Test images to analyze"
     )
@@ -38,9 +39,15 @@ def main():
     parser = get_arg_parser()
     options = parser.parse_args()
 
-    from .config import load_configs
+    from .config import load_configs, get_config
 
     config = load_configs(options.config)
+    if options.dump_config:
+        import toml
+        s = toml.dumps(get_config())
+        print(s)
+        return 0
+
     logging.config.dictConfig(config["logging"])
 
     if options.test_images:
